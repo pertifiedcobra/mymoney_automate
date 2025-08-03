@@ -139,7 +139,7 @@ class MyMoneyProAutomator:
         self._execute_adb(f"input swipe {x1} {y1} {x2} {y2} {duration}")
         time.sleep(self.coords.LONG_DELAY)
 
-    def _find_and_tap_text(self, target_text, max_swipes=5):
+    def _find_and_tap_text(self, target_text, screen_type, max_swipes=5):
         """
         Finds an item by its text. First checks a local cache for the location.
         If not found, falls back to OCR and saves the new location to the cache.
@@ -171,7 +171,14 @@ class MyMoneyProAutomator:
                 
                 # --- NEW: Image Pre-processing for better OCR accuracy ---
                 img = cv2.imread(screenshot_path_local)
-                # Convert to grayscale
+
+                # --- NEW: Conditional Cropping ---
+                if screen_type == 'account':
+                    logger.debug("Cropping image for account screen to remove logos.")
+                    # Shape is (height, width), so we crop the width (columns)
+                    img = img[:, 240:]
+
+                # --- Convert to grayscale for better OCR accuracy ---
                 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                 # Apply a binary threshold to get a black and white image
                 _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY_INV)
@@ -197,6 +204,8 @@ class MyMoneyProAutomator:
                         })
                 
                 searchable_text = " ".join([d['text'] for d in clean_words_data])
+                # --- NEW: Post-OCR Cleanup ---
+                searchable_text = re.sub(r'\s+[.,]\s+', ' ', searchable_text)
                 logger.debug(f"Searchable Text Block: '{searchable_text}'")
 
                 if target_text.lower() in searchable_text.lower():
@@ -206,7 +215,8 @@ class MyMoneyProAutomator:
                         if target_text.lower() == phrase_to_check.lower():
                             first_word_data = clean_words_data[k]
                             x, y, w, h = first_word_data['left'], first_word_data['top'], first_word_data['width'], first_word_data['height']
-                            center_x = x + w // 2
+                            # Adjust coordinates if image was cropped
+                            center_x = (x + w // 2) + (240 if screen_type == 'account' else 0)
                             center_y = y + h // 2
                             
                             logger.success(f"Found match '{phrase_to_check}' via OCR after {i} swipe(s). Tapping and caching location.")
@@ -235,12 +245,12 @@ class MyMoneyProAutomator:
     def select_account(self, account_name):
         logger.info(f"--- Selecting Account: {account_name} ---")
         self._tap(self.coords.account_entry_coords[0], self.coords.account_entry_coords[1])
-        return self._find_and_tap_text(account_name)
+        return self._find_and_tap_text(account_name, screen_type='account')
 
     def select_category(self, category_name):
         logger.info(f"--- Selecting Category: {category_name} ---")
         self._tap(self.coords.category_entry_coords[0], self.coords.category_entry_coords[1])
-        return self._find_and_tap_text(category_name)
+        return self._find_and_tap_text(category_name, screen_type='category')
 
     def enter_amount(self, amount_str):
         logger.info(f"--- Entering Amount: {amount_str} ---")
@@ -268,6 +278,7 @@ class MyMoneyProAutomator:
         # 2. Navigate to the correct month and year by tapping the '<' or '>' arrows.
         # It calculates how many months to move forward or backward from the current view.
         month_diff = (target_date.year - self._current_picker_date.year) * 12 + (target_date.month - self._current_picker_date.month)
+        logger.debug(f"Current Picker Date: {self._current_picker_date}, Target Date: {target_date}, Month Difference: {month_diff}")
         if month_diff > 0:
             for _ in range(month_diff): self._tap(self.coords.date_month_change_coords['next'][0], self.coords.date_month_change_coords['next'][1])
         elif month_diff < 0:
@@ -311,17 +322,14 @@ class MyMoneyProAutomator:
         target_ampm = target_time.strftime('%p')
         logger.debug(f"Attempting to select {target_ampm}")
         self._tap(self.coords.time_ampm_selector_coords[0], self.coords.time_ampm_selector_coords[1])
-        # --- FIX: Added a delay to allow the AM/PM dropdown to animate and appear ---
         self._tap(self.coords.time_ampm_coords[target_ampm][0], self.coords.time_ampm_coords[target_ampm][1])
         
         # 4. Enter the hour.
         self._tap(self.coords.time_hour_coords[0], self.coords.time_hour_coords[1])
-        # self._press_key(67); self._press_key(67) # Press backspace twice to clear
         self._type_text(target_time.strftime('%I')) # %I is for 12-hour format
         
         # 5. Enter the minute.
         self._tap(self.coords.time_minute_coords[0], self.coords.time_minute_coords[1])
-        # self._press_key(67); self._press_key(67)
         self._type_text(target_time.strftime('%M'))
         
         # 6. Finalize by tapping the 'OK' button.
@@ -382,48 +390,48 @@ if __name__ == '__main__':
 
     my_phone_coords = AppCoordinates()
     transactions_to_add = [
-        {
-            'account': 'Cash',
-            'category': 'Tax',
-            'amount': '1800.65',
-            'notes': 'Trial - Flight',
-            'datetime': datetime(2025, 8, 2, 18, 30),
-        },
-        {
-            'account': 'Infinity Tata Neu CC',
-            'category': 'Vacation',
-            'amount': '1200',
-            'notes': 'Trial 1',
-            'datetime': datetime(2025, 8, 1, 8, 30),
-        },
+        # {
+        #     'account': 'Cash',
+        #     'category': 'Tax',
+        #     'amount': '1800.65',
+        #     'notes': 'Trial - Flight1',
+        #     'datetime': datetime(2025, 8, 2, 18, 30),
+        # },
+        # {
+        #     'account': 'Infinity Tata Neu CC',
+        #     'category': 'Vacation',
+        #     'amount': '1200',
+        #     'notes': 'Trial 1',
+        #     'datetime': datetime(2025, 8, 1, 8, 30),
+        # },
         {
             'account': 'Splitwise',
             'category': 'Sports',
-            'amount': '1200',
-            'notes': 'Trial 1',
+            'amount': '345.67',
+            'notes': 'Trial 2',
             'datetime': datetime.strptime("2025-07-25 08:45 AM", "%Y-%m-%d %I:%M %p"),
         },
-        {
+        {  # Date Error
             'account': 'Infinity Tata Neu CC',
             'category': 'Vacation',
-            'amount': '1200',
+            'amount': '789.12',
             'notes': 'Trial 3',
             'datetime': datetime(2025, 8, 3, 1, 45),
         },
-        {
-            'account': 'HSBC CC',
-            'category': 'Vacation',
-            'amount': '654.78',
-            'notes': 'Trial 4',
-            'datetime': datetime.strptime("2025-08-25 04:45 AM", "%Y-%m-%d %I:%M %p"),
-        },
-        {
-            'account': 'SBI Elite CC',
-            'category': 'Vacation',
-            'amount': '123879.23',
-            'notes': 'Trial - Flight',
-            'datetime': datetime(2025, 8, 1, 8, 30),
-        },
+        # {
+        #     'account': 'HSBC CC',
+        #     'category': 'Vacation',
+        #     'amount': '654.78',
+        #     'notes': 'Trial 4',
+        #     'datetime': datetime.strptime("2025-08-25 04:45 AM", "%Y-%m-%d %I:%M %p"),
+        # },
+        # {
+        #     'account': 'SBI Elite CC',
+        #     'category': 'Vacation',
+        #     'amount': '123879.23',
+        #     'notes': 'Trial - Flight2',
+        #     'datetime': datetime(2025, 8, 1, 8, 30),
+        # },
     ]
 
     automator = MyMoneyProAutomator(coords=my_phone_coords)
