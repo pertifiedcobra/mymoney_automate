@@ -22,6 +22,61 @@ def find_header_row(df):
             return i
     return None
 
+def apply_categorization_rules(data, row):
+    """
+    Applies a set of predefined rules to automatically categorize transactions
+    and populate the Notes field.
+
+    Args:
+        data (dict): The transaction data dictionary to be modified.
+        row (pd.Series): The original row from the DataFrame to access all columns.
+    
+    Returns:
+        dict: The modified data dictionary.
+    """
+    # --- Define Your Custom Rules Here ---
+    # The script will check each rule in order. The FIRST rule that matches will be applied.
+    CATEGORIZATION_RULES = [
+        {
+            "keywords": ["Elior India", "Marusa Food", "S Darshan"],
+            "category": "Food",
+            "notes_from_remarks": True 
+        },
+        {
+            "keywords": ["Bmtc Bus"],
+            "category": "Transportation",
+            "notes_from_remarks": True 
+        },
+        # --- Add more rules below ---
+        # Example:
+        # {
+        #     "keywords": ["Flight", "Indigo", "Air India"],
+        #     "category": "Travel",
+        #     "notes_from_remarks": True
+        # },
+        # {
+        #     "keywords": ["Amazon", "Myntra", "Flipkart"],
+        #     "category": "Shopping",
+        #     "notes_from_remarks": False # Notes will remain empty
+        # },
+    ]
+
+    transaction_details = str(row.get('Transaction Details', '')).lower()
+    remarks = str(row.get('Remarks', ''))
+
+    for rule in CATEGORIZATION_RULES:
+        for keyword in rule['keywords']:
+            if keyword.lower() in transaction_details:
+                logger.debug(f"Rule matched for keyword '{keyword}'. Applying category '{rule['category']}'.")
+                data['Category'] = rule['category']
+                if rule['notes_from_remarks'] and remarks and not pd.isna(remarks) and remarks.lower() != 'nan':
+                    data['Notes'] = remarks
+                # Once a rule is matched for a transaction, we stop checking other rules.
+                return data
+    
+    return data
+
+
 def parse_tata_neu_excel(file_path):
     """
     Parses an Infinity Tata Neu CC statement from an Excel file and extracts transaction details.
@@ -101,6 +156,9 @@ def parse_tata_neu_excel(file_path):
             data['Notes'] = '' # To be filled manually
             data['Status'] = 'Pending' # Default status
             
+            # --- NEW: Apply categorization rules ---
+            data = apply_categorization_rules(data, row)
+
             transactions.append(data)
 
         except (ValueError, TypeError) as e:
@@ -130,7 +188,7 @@ def main():
     logger.add(sys.stderr, level="DEBUG", format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>")
 
     logger.info("--- Infinity Tata Neu CC Excel Statement to Excel Converter ---")
-    logger.info("Close the file that will be processed, otherwise it may cause an error.")
+    logger.warning("Close the file that will be processed, otherwise it may cause an error.")
     
     # input_excel_file = input("Please enter the full path to your statement .xlsx file: ")
     input_excel_file = "C:\\Users\\thaku\\OneDrive - Indian Institute of Technology (BHU), Varanasi\\Attachments\\Downloads\\Statements\\Paytm_UPI_Statement_03_Jul'25_-_28_Jul'25.xlsx"
@@ -143,6 +201,7 @@ def main():
         return
 
     transactions_df = parse_tata_neu_excel(input_excel_file)
+    pd.set_option('display.max_colwidth', None)
     logger.debug(f"Parsed DataFrame:\n{transactions_df.head(100) if transactions_df is not None else 'No transactions found.'}")
 
     # if transactions_df is not None and not transactions_df.empty:
