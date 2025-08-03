@@ -60,6 +60,11 @@ class AppCoordinates:
     This makes the script portable to different devices and screen resolutions.
     """
     def __init__(self):
+        # --- App Specific Configuration ---
+        # CRITICAL: You must find and set the package name for MyMoneyPro.
+        # See the README for instructions on how to find this.
+        self.app_package_name = "com.raha.app.mymoney.pro"
+
         # --- General Timings ---
         self.SHORT_DELAY = 0.1
         self.LONG_DELAY = 0.6
@@ -112,7 +117,6 @@ class MyMoneyProAutomator:
     """
     def __init__(self, coords: AppCoordinates):
         self.coords = coords
-        self._current_picker_date = datetime.now()
         self.calendar = calendar.Calendar(firstweekday=calendar.SUNDAY)
         # NEW: Initialize and load the UI cache
         self.cache = UICache()
@@ -120,25 +124,52 @@ class MyMoneyProAutomator:
 
     def _execute_adb(self, command, check=True):
         """Executes a given ADB command."""
-        return subprocess.run(f"adb shell {command}", shell=True, check=check, capture_output=True)
+        return subprocess.run(f"adb shell {command}", shell=True, check=check, capture_output=True, text=True)
+
+    def _check_app_focus(self):
+        """
+        SECURITY CHECK: Ensures the target app is in the foreground before performing any action.
+        If the wrong app is open, it aborts the script to prevent unintended taps.
+        """
+        try:
+            # This command gets information about the currently focused window
+            # result = self._execute_adb("dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'")
+            result = self._execute_adb('dumpsys window | findstr "mCurrentFocus mFocusedApp"')
+            focused_app_info = result.stdout.strip()
+            
+            if self.coords.app_package_name not in focused_app_info:
+                logger.critical("!!! SAFETY ABORT !!!")
+                logger.critical(f"The target app '{self.coords.app_package_name}' is NOT in the foreground.")
+                logger.critical(f"Currently focused app appears to be: {focused_app_info}")
+                logger.critical("Exiting to prevent unintended actions.")
+                sys.exit(1) # Exit the script with an error code
+            
+            logger.trace("App focus check passed.")
+        except Exception as e:
+            logger.error(f"Could not check app focus. Aborting for safety. Error: {e}")
+            sys.exit(1)
 
     def _tap(self, x, y, purpose="No purpose specified"):
+        self._check_app_focus() # Security check before every tap
         logger.debug(f"Tapping for '{purpose}' at ({x}, {y})")
         self._execute_adb(f"input tap {x} {y}")
         time.sleep(self.coords.SHORT_DELAY)
 
     def _type_text(self, text):
+        self._check_app_focus() # Security check
         formatted_text = text.replace(" ", "%s")
         logger.debug(f"Typing text: '{text}'")
         self._execute_adb(f"input text '{formatted_text}'")
         time.sleep(self.coords.SHORT_DELAY)
 
     def _press_key(self, keycode):
+        self._check_app_focus() # Security check
         logger.debug(f"Pressing keycode: {keycode}")
         self._execute_adb(f"input keyevent {keycode}")
         time.sleep(0.1)
 
     def _swipe(self, x1, y1, x2, y2, duration):
+        self._check_app_focus() # Security check
         logger.info("Swiping screen to scroll...")
         self._execute_adb(f"input swipe {x1} {y1} {x2} {y2} {duration}")
         time.sleep(self.coords.LONG_DELAY)
@@ -169,6 +200,7 @@ class MyMoneyProAutomator:
 
         for i in range(max_swipes):
             try:
+                self._check_app_focus() # Check focus before taking a screenshot
                 logger.debug(f"Scan attempt {i+1}/{max_swipes} for '{target_text}'")
                 self._execute_adb(f"screencap -p {screenshot_path_phone}")
                 subprocess.run(f"adb pull {screenshot_path_phone} {screenshot_path_local}", shell=True, check=True, capture_output=True)
@@ -196,11 +228,7 @@ class MyMoneyProAutomator:
                 for j in range(len(ocr_data['text'])):
                     if int(ocr_data['conf'][j]) > 40:
                         word = ocr_data['text'][j].strip()
-                        if not word:
-                            continue
-                        if re.search(r'\d', word):
-                            continue
-                        if word in ['©', '—', '₹', '%', '|']:
+                        if not word or re.search(r'\d', word) or word in ['©', '—', '₹', '%', '|']:
                             continue
                         clean_words_data.append({
                             'text': word, 'left': ocr_data['left'][j], 'top': ocr_data['top'][j],
@@ -273,7 +301,6 @@ class MyMoneyProAutomator:
         corresponding key on the screen.
         """
         logger.info(f"--- Entering Amount: {amount_str} ---")
-        # for _ in range(5): self._tap(self.coords.backspace_coords[0], self.coords.backspace_coords[1])
         for char in str(amount_str):
             if char in self.coords.keypad_coords:
                 self._tap(self.coords.keypad_coords[char][0], self.coords.keypad_coords[char][1], purpose=f"Enter amount digit '{char}'")
@@ -296,6 +323,7 @@ class MyMoneyProAutomator:
         
         # 2. Navigate to the correct month and year by tapping the '<' or '>' arrows.
         # It calculates how many months to move forward or backward from the current view.
+        self._current_picker_date = datetime.now()
         month_diff = (target_date.year - self._current_picker_date.year) * 12 + (target_date.month - self._current_picker_date.month)
         logger.debug(f"Current Picker Date: {self._current_picker_date}, Target Date: {target_date}, Month Difference: {month_diff}")
         if month_diff > 0:
@@ -433,36 +461,38 @@ if __name__ == '__main__':
             'notes': 'Trial 3',
             'datetime': datetime(2025, 8, 3, 1, 30),
         },
-        {
-            'account': 'HSBC CC',
-            'category': 'Vacation',
-            'amount': '654.78',
-            'notes': 'Trial 4',
-            'datetime': datetime.strptime("2025-08-25 04:45 AM", "%Y-%m-%d %I:%M %p"),
-        },
-        {
-            'account': 'Cash',
-            'category': 'Tax',
-            'amount': '1800.65',
-            'notes': 'Trial - Flight',
-            'datetime': datetime(2025, 8, 2, 18, 30),
-        },
-        {
-            'account': 'SBI Elite CC',
-            'category': 'Transportation',
-            'amount': '123879.23',
-            'notes': 'Trial - Flight',
-            'datetime': datetime(2025, 8, 1, 8, 30),
-        },
+        # {
+        #     'account': 'HSBC CC',
+        #     'category': 'Vacation',
+        #     'amount': '654.78',
+        #     'notes': 'Trial 4',
+        #     'datetime': datetime.strptime("2025-08-25 04:45 AM", "%Y-%m-%d %I:%M %p"),
+        # },
+        # {
+        #     'account': 'Cash',
+        #     'category': 'Tax',
+        #     'amount': '1800.65',
+        #     'notes': 'Trial - Flight',
+        #     'datetime': datetime(2025, 8, 2, 18, 30),
+        # },
+        # {
+        #     'account': 'SBI Elite CC',
+        #     'category': 'Transportation',
+        #     'amount': '123879.23',
+        #     'notes': 'Trial - Flight',
+        #     'datetime': datetime(2025, 8, 1, 8, 30),
+        # },
     ]
 
     automator = MyMoneyProAutomator(coords=my_phone_coords)
 
     logger.info("="*50)
-    logger.info("Starting MyMoneyPro Automation in 5 seconds...")
+    logger.info("Starting MyMoneyPro Automation...")
     logger.info("Please ensure your phone is connected, unlocked, and on its MAIN screen.")
-    logger.info("="*50)
-    time.sleep(5)
+    # --- NEW: User confirmation before starting ---
+    input("Press Enter to begin...")
+    logger.info("Starting in 3 seconds...")
+    time.sleep(3)
 
     for transaction in transactions_to_add:
         success = automator.add_expense(transaction)
