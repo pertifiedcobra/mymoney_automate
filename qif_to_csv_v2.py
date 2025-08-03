@@ -137,8 +137,8 @@ def main():
     logger.info("--- HDFC QIF Statement to Excel Converter ---")
     logger.warning("Close the file that will be processed, otherwise it may cause an error.")
     
-    # input_qif_file = input("Please enter the full path to your HDFC .qif file: ")
-    input_qif_file = "C:\\Users\\thaku\\OneDrive - Indian Institute of Technology (BHU), Varanasi\\Attachments\\Downloads\\Statements\\HDFCs\\Acct Statement_XX2562_22022025.qif"
+    input_qif_file = input("Please enter the full path to your HDFC .qif file: ")
+    # input_qif_file = "C:\\Users\\thaku\\OneDrive - Indian Institute of Technology (BHU), Varanasi\\Attachments\\Downloads\\Statements\\HDFCs\\Acct Statement_XX2562_22022025.qif"
     # --- NEW: Automatically clean the path copied from Windows Explorer ---
     input_qif_file = input_qif_file.strip()
     input_qif_file = input_qif_file.strip('"')
@@ -148,18 +148,20 @@ def main():
         return
 
     transactions_df = parse_hdfc_qif(input_qif_file)
-    logger.debug(f"Parsed DataFrame:\n{transactions_df.head(20) if transactions_df is not None else 'No transactions found.'}")
+    pd.set_option('display.max_colwidth', None)
+    logger.debug(f"Parsed DataFrame:\n{transactions_df.head(100) if transactions_df is not None else 'No transactions found.'}")
 
-    # if transactions_df is not None and not transactions_df.empty:
-    #     base_name = os.path.basename(input_qif_file).replace('.qif', '')
-    #     output_excel_file = f"{base_name}_processed.xlsx"
-        
-    #     try:
-    #         transactions_df.to_excel(output_excel_file, index=False)
-    #         logger.success(f"Successfully processed {len(transactions_df)} transactions.")
-    #         logger.success(f"Output saved to: {os.path.abspath(output_excel_file)}")
-    #     except Exception as e:
-    #         logger.error(f"Failed to save the Excel file. Error: {e}")
+    if transactions_df is not None and not transactions_df.empty:
+        base_name = os.path.basename(input_qif_file).replace('.qif', '')
+        input_dir = os.path.dirname(input_qif_file)
+        output_excel_file = os.path.join(input_dir, f"{base_name}_processed.xlsx")
+    
+        try:
+            transactions_df.to_excel(output_excel_file, index=False)
+            logger.success(f"Successfully processed {len(transactions_df)} transactions.")
+            logger.success(f"Output saved to: {os.path.abspath(output_excel_file)}")
+        except Exception as e:
+            logger.error(f"Failed to save the Excel file. Error: {e}")
 
 if __name__ == '__main__':
     main()

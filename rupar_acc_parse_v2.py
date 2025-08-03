@@ -204,16 +204,17 @@ def main():
     pd.set_option('display.max_colwidth', None)
     logger.debug(f"Parsed DataFrame:\n{transactions_df.head(100) if transactions_df is not None else 'No transactions found.'}")
 
-    # if transactions_df is not None and not transactions_df.empty:
-    #     base_name = os.path.basename(input_excel_file).replace('.xlsx', '').replace('.xls', '')
-    #     output_excel_file = f"{base_name}_processed.xlsx"
+    if transactions_df is not None and not transactions_df.empty:
+        base_name = os.path.basename(input_excel_file).replace('.xlsx', '').replace('.xls', '')
+        input_dir = os.path.dirname(input_excel_file)
+        output_excel_file = os.path.join(input_dir, f"{base_name}_processed.xlsx")
         
-    #     try:
-    #         transactions_df.to_excel(output_excel_file, index=False)
-    #         logger.success(f"Successfully processed {len(transactions_df)} transactions.")
-    #         logger.success(f"Output saved to: {os.path.abspath(output_excel_file)}")
-    #     except Exception as e:
-    #         logger.error(f"Failed to save the Excel file. Error: {e}")
+        try:
+            transactions_df.to_excel(output_excel_file, index=False)
+            logger.success(f"Successfully processed {len(transactions_df)} transactions.")
+            logger.success(f"Output saved to: {os.path.abspath(output_excel_file)}")
+        except Exception as e:
+            logger.error(f"Failed to save the Excel file. Error: {e}")
 
 if __name__ == '__main__':
     main()
