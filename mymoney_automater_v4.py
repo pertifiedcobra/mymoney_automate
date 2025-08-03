@@ -61,8 +61,8 @@ class AppCoordinates:
     """
     def __init__(self):
         # --- General Timings ---
-        self.SHORT_DELAY = 0.2
-        self.LONG_DELAY = 1.0
+        self.SHORT_DELAY = 0.1
+        self.LONG_DELAY = 0.6
 
         # --- Navigation Coordinates ---
         self.initiate_new_entry_coords = (910, 1970)
@@ -100,6 +100,10 @@ class AppCoordinates:
 
         # --- Scrolling / Swiping ---
         self.swipe_coords = (500, 1800, 500, 800, 300)
+        
+        # --- OCR Configuration ---
+        self.account_list_crop_pixels = 240
+        self.category_name_crop = 10  # Crop length for category names that are too long
 
 
 class MyMoneyProAutomator:
@@ -169,14 +173,14 @@ class MyMoneyProAutomator:
                 self._execute_adb(f"screencap -p {screenshot_path_phone}")
                 subprocess.run(f"adb pull {screenshot_path_phone} {screenshot_path_local}", shell=True, check=True, capture_output=True)
                 
-                # --- NEW: Image Pre-processing for better OCR accuracy ---
+                # --- Image Pre-processing for better OCR accuracy ---
                 img = cv2.imread(screenshot_path_local)
 
-                # --- NEW: Conditional Cropping ---
+                crop_amount = 0
                 if screen_type == 'account':
                     logger.debug("Cropping image for account screen to remove logos.")
-                    # Shape is (height, width), so we crop the width (columns)
-                    img = img[:, 240:]
+                    crop_amount = self.coords.account_list_crop_pixels
+                    img = img[:, crop_amount:]
 
                 # --- Convert to grayscale for better OCR accuracy ---
                 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -204,7 +208,7 @@ class MyMoneyProAutomator:
                         })
                 
                 searchable_text = " ".join([d['text'] for d in clean_words_data])
-                # --- NEW: Post-OCR Cleanup ---
+                # --- Post-OCR Cleanup ---
                 searchable_text = re.sub(r'\s+[.,]\s+', ' ', searchable_text)
                 logger.debug(f"Searchable Text Block: '{searchable_text}'")
 
@@ -215,8 +219,7 @@ class MyMoneyProAutomator:
                         if target_text.lower() == phrase_to_check.lower():
                             first_word_data = clean_words_data[k]
                             x, y, w, h = first_word_data['left'], first_word_data['top'], first_word_data['width'], first_word_data['height']
-                            # Adjust coordinates if image was cropped
-                            center_x = (x + w // 2) + (240 if screen_type == 'account' else 0)
+                            center_x = (x + w // 2) + crop_amount
                             center_y = y + h // 2
                             
                             logger.success(f"Found match '{phrase_to_check}' via OCR after {i} swipe(s). Tapping and caching location.")
@@ -243,17 +246,34 @@ class MyMoneyProAutomator:
         return False
 
     def select_account(self, account_name):
+        """
+        Selects an account from the list.
+        It first opens the account selection screen, then uses the intelligent
+        find_and_tap_text method to locate and tap the correct account name.
+        """
         logger.info(f"--- Selecting Account: {account_name} ---")
         self._tap(self.coords.account_entry_coords[0], self.coords.account_entry_coords[1], purpose="Open account list")
         return self._find_and_tap_text(account_name, screen_type='account')
 
     def select_category(self, category_name):
+        """
+        Selects a category from the grid.
+        It first opens the category selection screen, then uses the intelligent
+        find_and_tap_text method to locate and tap the correct category name.
+        """
         logger.info(f"--- Selecting Category: {category_name} ---")
+        category_name = category_name[:self.coords.category_name_crop]  # Ensure the category name is not too long
         self._tap(self.coords.category_entry_coords[0], self.coords.category_entry_coords[1], purpose="Open category list")
         return self._find_and_tap_text(category_name, screen_type='category')
 
     def enter_amount(self, amount_str):
+        """
+        Enters the transaction amount using the on-screen custom keypad.
+        It iterates through each character of the amount string and taps the
+        corresponding key on the screen.
+        """
         logger.info(f"--- Entering Amount: {amount_str} ---")
+        # for _ in range(5): self._tap(self.coords.backspace_coords[0], self.coords.backspace_coords[1])
         for char in str(amount_str):
             if char in self.coords.keypad_coords:
                 self._tap(self.coords.keypad_coords[char][0], self.coords.keypad_coords[char][1], purpose=f"Enter amount digit '{char}'")
@@ -332,6 +352,9 @@ class MyMoneyProAutomator:
         self._tap(self.coords.time_ok_coords[0], self.coords.time_ok_coords[1], purpose="Confirm time (OK)")
 
     def enter_notes(self, notes_text):
+        """
+        Enters the transaction notes into the appropriate text field.
+        """
         logger.info(f"--- Entering Notes: {notes_text} ---")
         self._tap(self.coords.notes_section_coords[0], self.coords.notes_section_coords[1], purpose="Enter notes section")
         self._type_text(notes_text)
@@ -351,6 +374,7 @@ class MyMoneyProAutomator:
         Returns:
             bool: True if the expense was added successfully, False otherwise.
         """
+        start_time = time.time()
         logger.info(f"\n>>> PROCESSING EXPENSE: {expense_data['notes']} <<<")
         try:
             # 1. Start from the main screen and tap the button to add a new entry.
@@ -373,6 +397,8 @@ class MyMoneyProAutomator:
             time.sleep(self.coords.LONG_DELAY)
             
             logger.success(">>> SUCCESSFULLY ADDED EXPENSE! <<<")
+            elapsed_time = time.time() - start_time
+            logger.info(f"Time taken for this transaction: {elapsed_time:.2f} seconds")
             return True
         except Exception as e:
             logger.exception("!!! An unrecoverable error occurred during expense entry !!!")
@@ -386,48 +412,48 @@ if __name__ == '__main__':
 
     my_phone_coords = AppCoordinates()
     transactions_to_add = [
-        # {
-        #     'account': 'Cash',
-        #     'category': 'Tax',
-        #     'amount': '1800.65',
-        #     'notes': 'Trial - Flight1',
-        #     'datetime': datetime(2025, 8, 2, 18, 30),
-        # },
-        # {
-        #     'account': 'Infinity Tata Neu CC',
-        #     'category': 'Vacation',
-        #     'amount': '1200',
-        #     'notes': 'Trial 1',
-        #     'datetime': datetime(2025, 8, 1, 8, 30),
-        # },
         {
-            'account': 'Splitwise',
-            'category': 'Sports',
-            'amount': '345.67',
-            'notes': 'Trial 2',
-            'datetime': datetime.strptime("2025-07-25 08:45 AM", "%Y-%m-%d %I:%M %p"),
-        },
-        {   # Date Error
             'account': 'Infinity Tata Neu CC',
             'category': 'Vacation',
-            'amount': '789.12',
-            'notes': 'Trial 3',
-            'datetime': datetime(2025, 8, 3, 1, 45),
+            'amount': '1200',
+            'notes': 'Trial 1',
+            'datetime': datetime(2025, 8, 1, 8, 30),
         },
-        # {
-        #     'account': 'HSBC CC',
-        #     'category': 'Vacation',
-        #     'amount': '654.78',
-        #     'notes': 'Trial 4',
-        #     'datetime': datetime.strptime("2025-08-25 04:45 AM", "%Y-%m-%d %I:%M %p"),
-        # },
-        # {
-        #     'account': 'SBI Elite CC',
-        #     'category': 'Vacation',
-        #     'amount': '123879.23',
-        #     'notes': 'Trial - Flight2',
-        #     'datetime': datetime(2025, 8, 1, 8, 30),
-        # },
+        {
+            'account': 'Splitwise',
+            'category': 'Transportation',
+            'amount': '1200',
+            'notes': 'Trial 1',
+            'datetime': datetime.strptime("2025-07-25 08:45 PM", "%Y-%m-%d %I:%M %p"),
+        },
+        {
+            'account': 'Infinity Tata Neu CC',
+            'category': 'Entertainment',
+            'amount': '1200',
+            'notes': 'Trial 3',
+            'datetime': datetime(2025, 8, 3, 1, 30),
+        },
+        {
+            'account': 'HSBC CC',
+            'category': 'Vacation',
+            'amount': '654.78',
+            'notes': 'Trial 4',
+            'datetime': datetime.strptime("2025-08-25 04:45 AM", "%Y-%m-%d %I:%M %p"),
+        },
+        {
+            'account': 'Cash',
+            'category': 'Tax',
+            'amount': '1800.65',
+            'notes': 'Trial - Flight',
+            'datetime': datetime(2025, 8, 2, 18, 30),
+        },
+        {
+            'account': 'SBI Elite CC',
+            'category': 'Transportation',
+            'amount': '123879.23',
+            'notes': 'Trial - Flight',
+            'datetime': datetime(2025, 8, 1, 8, 30),
+        },
     ]
 
     automator = MyMoneyProAutomator(coords=my_phone_coords)
