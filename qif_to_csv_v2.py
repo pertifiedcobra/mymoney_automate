@@ -21,9 +21,15 @@ def parse_hdfc_qif(file_path):
                           columns ready for the automation script, or None if
                           the file cannot be processed.
     """
-    account_name = 'HDFC - Special Gold'
-    if "XX2562_22022025" in file_path:
+    account_name = ''
+    if "XX2562" in file_path:
         account_name = 'HDFC - UPI'
+    elif "XX6642" in file_path:
+        account_name = 'HDFC - Special Gold'
+    else:
+        logger.error(f"Unknown account name for file: {file_path}. Defaulting to '{account_name}'.")
+        raise ValueError(f"Unknown account name for file: {file_path}. Please check the file name or update the script.")
+
     transactions = []
     try:
         with open(file_path, 'r') as f:
@@ -129,9 +135,13 @@ def main():
     logger.add(sys.stderr, level="DEBUG", format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>")
 
     logger.info("--- HDFC QIF Statement to Excel Converter ---")
+    logger.info("Close the file that will be processed, otherwise it may cause an error.")
     
-    # input_qif_file = input("Please enter the full path to your HDFC .qif file: ").strip()
+    # input_qif_file = input("Please enter the full path to your HDFC .qif file: ")
     input_qif_file = "C:\\Users\\thaku\\OneDrive - Indian Institute of Technology (BHU), Varanasi\\Attachments\\Downloads\\Statements\\HDFCs\\Acct Statement_XX2562_22022025.qif"
+    # --- NEW: Automatically clean the path copied from Windows Explorer ---
+    input_qif_file = input_qif_file.strip()
+    input_qif_file = input_qif_file.strip('"')
 
     if not os.path.exists(input_qif_file):
         logger.error("The provided file path does not exist. Please check the path and try again.")
