@@ -62,7 +62,7 @@ class AppCoordinates:
     def __init__(self):
         # --- General Timings ---
         self.SHORT_DELAY = 0.2
-        self.LONG_DELAY = 2.0
+        self.LONG_DELAY = 1.0
 
         # --- Navigation Coordinates ---
         self.initiate_new_entry_coords = (910, 1970)
@@ -118,8 +118,8 @@ class MyMoneyProAutomator:
         """Executes a given ADB command."""
         return subprocess.run(f"adb shell {command}", shell=True, check=check, capture_output=True)
 
-    def _tap(self, x, y):
-        logger.debug(f"Tapping at ({x}, {y})")
+    def _tap(self, x, y, purpose="No purpose specified"):
+        logger.debug(f"Tapping for '{purpose}' at ({x}, {y})")
         self._execute_adb(f"input tap {x} {y}")
         time.sleep(self.coords.SHORT_DELAY)
 
@@ -156,7 +156,7 @@ class MyMoneyProAutomator:
                     self._swipe(*self.coords.swipe_coords)
             
             logger.info(f"Tapping cached coordinates for '{target_text}'.")
-            self._tap(coords[0], coords[1])
+            self._tap(coords[0], coords[1], purpose=f"Select cached item '{target_text}'")
             return True
 
         logger.warning(f"'{target_text}' not in cache. Starting OCR fallback...")
@@ -224,7 +224,7 @@ class MyMoneyProAutomator:
                             self.cache.set(target_text, i, (center_x, center_y))
                             self.cache.save()
                             
-                            self._tap(center_x, center_y)
+                            self._tap(center_x, center_y, purpose=f"Select item '{phrase_to_check}'")
                             return True
                 
                 logger.warning(f"'{target_text}' not found on screen. Swiping...")
@@ -244,20 +244,19 @@ class MyMoneyProAutomator:
 
     def select_account(self, account_name):
         logger.info(f"--- Selecting Account: {account_name} ---")
-        self._tap(self.coords.account_entry_coords[0], self.coords.account_entry_coords[1])
+        self._tap(self.coords.account_entry_coords[0], self.coords.account_entry_coords[1], purpose="Open account list")
         return self._find_and_tap_text(account_name, screen_type='account')
 
     def select_category(self, category_name):
         logger.info(f"--- Selecting Category: {category_name} ---")
-        self._tap(self.coords.category_entry_coords[0], self.coords.category_entry_coords[1])
+        self._tap(self.coords.category_entry_coords[0], self.coords.category_entry_coords[1], purpose="Open category list")
         return self._find_and_tap_text(category_name, screen_type='category')
 
     def enter_amount(self, amount_str):
         logger.info(f"--- Entering Amount: {amount_str} ---")
-        # for _ in range(5): self._tap(self.coords.backspace_coords[0], self.coords.backspace_coords[1])
         for char in str(amount_str):
             if char in self.coords.keypad_coords:
-                self._tap(self.coords.keypad_coords[char][0], self.coords.keypad_coords[char][1])
+                self._tap(self.coords.keypad_coords[char][0], self.coords.keypad_coords[char][1], purpose=f"Enter amount digit '{char}'")
 
     def set_date(self, target_date: datetime):
         """
@@ -273,32 +272,29 @@ class MyMoneyProAutomator:
         """
         logger.info(f"--- Setting Date to: {target_date.strftime('%Y-%m-%d')} ---")
         # 1. Open the date picker dialog.
-        self._tap(self.coords.date_picker_entry_coords[0], self.coords.date_picker_entry_coords[1])
+        self._tap(self.coords.date_picker_entry_coords[0], self.coords.date_picker_entry_coords[1], purpose="Open date picker")
         
         # 2. Navigate to the correct month and year by tapping the '<' or '>' arrows.
         # It calculates how many months to move forward or backward from the current view.
         month_diff = (target_date.year - self._current_picker_date.year) * 12 + (target_date.month - self._current_picker_date.month)
         logger.debug(f"Current Picker Date: {self._current_picker_date}, Target Date: {target_date}, Month Difference: {month_diff}")
         if month_diff > 0:
-            for _ in range(month_diff): self._tap(self.coords.date_month_change_coords['next'][0], self.coords.date_month_change_coords['next'][1])
+            for _ in range(month_diff): self._tap(self.coords.date_month_change_coords['next'][0], self.coords.date_month_change_coords['next'][1], purpose="Next month")
         elif month_diff < 0:
-            for _ in range(abs(month_diff)): self._tap(self.coords.date_month_change_coords['prev'][0], self.coords.date_month_change_coords['prev'][1])
+            for _ in range(abs(month_diff)): self._tap(self.coords.date_month_change_coords['prev'][0], self.coords.date_month_change_coords['prev'][1], purpose="Previous month")
         
-        # 3. Update the internal state to prevent re-navigating next time.
-        self._current_picker_date = target_date
-        
-        # 4. Dynamically find the position of the target day.
+        # 3. Dynamically find the position of the target day.
         # It builds a virtual calendar for the target month and finds the row/column of the target day.
         month_calendar = self.calendar.monthdayscalendar(target_date.year, target_date.month)
         for week_index, week in enumerate(month_calendar):
             if target_date.day in week:
-                # 5. Map the row/column to the actual screen coordinates and tap.
+                # 4. Map the row/column to the actual screen coordinates and tap.
                 day_index = week.index(target_date.day)
-                self._tap(self.coords.date_grid_x_coords[day_index], self.coords.date_grid_y_coords[week_index])
+                self._tap(self.coords.date_grid_x_coords[day_index], self.coords.date_grid_y_coords[week_index], purpose=f"Select day {target_date.day}")
                 break
         
-        # 6. Finalize by tapping the 'OK' button.
-        self._tap(self.coords.date_ok_coords[0], self.coords.date_ok_coords[1])
+        # 5. Finalize by tapping the 'OK' button.
+        self._tap(self.coords.date_ok_coords[0], self.coords.date_ok_coords[1], purpose="Confirm date (OK)")
 
     def set_time(self, target_time: datetime):
         """
@@ -313,31 +309,31 @@ class MyMoneyProAutomator:
         """
         logger.info(f"--- Setting Time to: {target_time.strftime('%I:%M %p')} ---")
         # 1. Open the time picker dialog.
-        self._tap(self.coords.time_picker_entry_coords[0], self.coords.time_picker_entry_coords[1])
+        self._tap(self.coords.time_picker_entry_coords[0], self.coords.time_picker_entry_coords[1], purpose="Open time picker")
         
         # 2. Switch to the more reliable keyboard input mode.
-        self._tap(self.coords.time_keypad_mode_coords[0], self.coords.time_keypad_mode_coords[1])
+        self._tap(self.coords.time_keypad_mode_coords[0], self.coords.time_keypad_mode_coords[1], purpose="Switch to time keypad mode")
 
         # 3. Select AM or PM.
         target_ampm = target_time.strftime('%p')
         logger.debug(f"Attempting to select {target_ampm}")
-        self._tap(self.coords.time_ampm_selector_coords[0], self.coords.time_ampm_selector_coords[1])
-        self._tap(self.coords.time_ampm_coords[target_ampm][0], self.coords.time_ampm_coords[target_ampm][1])
+        self._tap(self.coords.time_ampm_selector_coords[0], self.coords.time_ampm_selector_coords[1], purpose="Open AM/PM selector")
+        self._tap(self.coords.time_ampm_coords[target_ampm][0], self.coords.time_ampm_coords[target_ampm][1], purpose=f"Select {target_ampm}")
         
         # 4. Enter the hour.
-        self._tap(self.coords.time_hour_coords[0], self.coords.time_hour_coords[1])
+        self._tap(self.coords.time_hour_coords[0], self.coords.time_hour_coords[1], purpose="Tap hour field")
         self._type_text(target_time.strftime('%I')) # %I is for 12-hour format
         
         # 5. Enter the minute.
-        self._tap(self.coords.time_minute_coords[0], self.coords.time_minute_coords[1])
+        self._tap(self.coords.time_minute_coords[0], self.coords.time_minute_coords[1], purpose="Tap minute field")
         self._type_text(target_time.strftime('%M'))
         
         # 6. Finalize by tapping the 'OK' button.
-        self._tap(self.coords.time_ok_coords[0], self.coords.time_ok_coords[1])
+        self._tap(self.coords.time_ok_coords[0], self.coords.time_ok_coords[1], purpose="Confirm time (OK)")
 
     def enter_notes(self, notes_text):
         logger.info(f"--- Entering Notes: {notes_text} ---")
-        self._tap(self.coords.notes_section_coords[0], self.coords.notes_section_coords[1])
+        self._tap(self.coords.notes_section_coords[0], self.coords.notes_section_coords[1], purpose="Enter notes section")
         self._type_text(notes_text)
 
     def add_expense(self, expense_data):
@@ -359,7 +355,7 @@ class MyMoneyProAutomator:
         try:
             # 1. Start from the main screen and tap the button to add a new entry.
             logger.info("--- Navigating to Add Expense screen ---")
-            self._tap(self.coords.initiate_new_entry_coords[0], self.coords.initiate_new_entry_coords[1])
+            self._tap(self.coords.initiate_new_entry_coords[0], self.coords.initiate_new_entry_coords[1], purpose="Initiate new expense entry")
             time.sleep(self.coords.LONG_DELAY)
 
             # 2. Fill in all the details in the specified order.
@@ -373,7 +369,7 @@ class MyMoneyProAutomator:
             
             # 3. Save the expense and wait for the app to return to the main screen.
             logger.info("--- Saving Expense ---")
-            self._tap(self.coords.save_button_coords[0], self.coords.save_button_coords[1])
+            self._tap(self.coords.save_button_coords[0], self.coords.save_button_coords[1], purpose="Save expense")
             time.sleep(self.coords.LONG_DELAY)
             
             logger.success(">>> SUCCESSFULLY ADDED EXPENSE! <<<")
@@ -411,7 +407,7 @@ if __name__ == '__main__':
             'notes': 'Trial 2',
             'datetime': datetime.strptime("2025-07-25 08:45 AM", "%Y-%m-%d %I:%M %p"),
         },
-        {  # Date Error
+        {   # Date Error
             'account': 'Infinity Tata Neu CC',
             'category': 'Vacation',
             'amount': '789.12',
