@@ -10,7 +10,11 @@ from PIL import Image
 import pytesseract
 from loguru import logger
 import cv2
+import pprint
+import pandas as pd
 import numpy as np
+
+from account_categories_list import accounts_list, entry_type, categories_list
 
 # --- Configuration Section ---
 # If Tesseract is not in your system's PATH, uncomment and set the path below.
@@ -72,6 +76,7 @@ class AppCoordinates:
         # --- Navigation Coordinates ---
         self.initiate_new_entry_coords = (910, 1970)
         self.save_button_coords = (950, 150)
+
         self.income_entry_coords = (174, 380)
         self.transfer_entry_coords = (853, 382)
 
@@ -231,22 +236,27 @@ class MyMoneyProAutomator:
                 for j in range(len(ocr_data['text'])):
                     if int(ocr_data['conf'][j]) > 40:
                         word = ocr_data['text'][j].strip()
-                        if not word or re.search(r'\d', word) or word in ['©', '—', '₹', '%', '|']:
+                        if (
+                            not word or
+                            re.search(r'\d', word) or
+                            word in ['©', '—', '₹', '%', '|', '.', ','] or
+                            re.search(r'\s+[.,]\s+', word)
+                        ):
                             continue
                         clean_words_data.append({
                             'text': word, 'left': ocr_data['left'][j], 'top': ocr_data['top'][j],
                             'width': ocr_data['width'][j], 'height': ocr_data['height'][j]
                         })
-                
+                logger.debug(f"{[d['text'] for d in clean_words_data]}")
                 searchable_text = " ".join([d['text'] for d in clean_words_data])
-                # --- Post-OCR Cleanup ---
-                searchable_text = re.sub(r'\s+[.,]\s+', ' ', searchable_text)
                 logger.debug(f"Searchable Text Block: '{searchable_text}'")
 
                 if target_text.lower() in searchable_text.lower():
+                    logger.debug(f"Found '{target_text}' in the OCR text block.")
                     target_words = target_text.split()
                     for k in range(len(clean_words_data) - len(target_words) + 1):
                         phrase_to_check = " ".join([clean_words_data[k+l]['text'] for l in range(len(target_words))])
+                        # logger.debug(f"Checking phrase: '{phrase_to_check}' against target '{target_text}'")
                         if target_text.lower() in phrase_to_check.lower():
                             first_word_data = clean_words_data[k]
                             x, y, w, h = first_word_data['left'], first_word_data['top'], first_word_data['width'], first_word_data['height']
@@ -467,70 +477,165 @@ class MyMoneyProAutomator:
             logger.exception("An error occurred while processing the entry.")
             logger.error("You may need to manually press CANCEL on the phone to reset the app state.")
             return False
+    
+def load_transactions_from_excel(file_path):
+    """
+    Loads transactions from a processed Excel file.
+    Only loads rows where the 'Status' is 'Pending'.
+    """
+    try:
+        df = pd.read_excel(file_path)
+        df.columns = [col.lower() for col in df.columns]  # Make all column names lower case
+        logger.info(f"Successfully loaded '{file_path}'.")
+        
+        # Filter for pending transactions
+        pending_df = df[df['status'].str.lower() == 'pending'].copy()
+        logger.info(f"Found {len(pending_df)} pending transactions to process.")
 
-            
+        # Convert 'Datetime' string back to datetime object
+        pending_df['datetime'] = pd.to_datetime(pending_df['datetime'], format='%Y-%m-%d %I:%M %p')
+        
+        # Convert DataFrame to a list of dictionaries
+        return pending_df.to_dict('records')
+
+    except FileNotFoundError:
+        logger.error(f"Input Excel file not found at: {file_path}")
+        return []
+    except Exception as e:
+        logger.exception(f"An error occurred while loading the Excel file.")
+        return []
+
+def load_sample_transactions():
+        """
+        Loads a sample set of transactions for testing purposes.
+        This is useful for quick testing without needing an Excel file.
+        """
+        transactions_to_add = [
+            # {
+            #     'account': 'Infinity Tata Neu CC',
+            #     'category': 'Vacation',
+            #     'amount': '1200',
+            #     'notes': 'Trial 1',
+            #     'datetime': datetime(2025, 8, 1, 8, 30),
+            # },
+            {
+                'type': 'transfer',
+                'account': 'Infinity Tata Neu CC',
+                'category': 'Splitwise',  # In case of Transfer, this is the other account
+                'amount': '1200',
+                'notes': 'Trial 3',
+                'datetime': datetime(2025, 8, 9, 19, 30),
+            },
+            # {
+            #     'type': 'income',
+            #     'account': 'Infinity Tata Neu CC',
+            #     'category': 'Salary',
+            #     'amount': '1200',
+            #     'notes': 'Trial 3',
+            #     'datetime': datetime(2025, 8, 3, 1, 30),
+            # },
+            # {
+            #     'type': 'expense',
+            #     'account': 'Splitwise',
+            #     'category': 'Transportation',
+            #     'amount': '1200',
+            #     'notes': 'Trial 1',
+            #     'datetime': datetime.strptime("2025-08-25 08:45 PM", "%Y-%m-%d %I:%M %p"),
+            # },
+            # {
+            #     'account': 'HSBC CC',
+            #     'category': 'Vacation',
+            #     'amount': '654.78',
+            #     'notes': 'Trial 4',
+            #     'datetime': datetime.strptime("2025-08-25 04:45 AM", "%Y-%m-%d %I:%M %p"),
+            # },
+            # {
+            #     'account': 'Cash',
+            #     'category': 'Tax',
+            #     'amount': '1800.65',
+            #     'notes': 'Trial - Flight',
+            #     'datetime': datetime(2025, 8, 2, 18, 30),
+            # },
+            # {
+            #     'account': 'SBI Elite CC',
+            #     'category': 'Transportation',
+            #     'amount': '123879.23',
+            #     'notes': 'Trial - Flight',
+            #     'datetime': datetime(2025, 8, 1, 8, 30),
+            # },
+        ]
+        return transactions_to_add
+
+def serialize_datetimes(transactions):
+    for tx in transactions:
+        for k, v in tx.items():
+            if isinstance(v, datetime):
+                tx[k] = v.strftime("%Y-%m-%d %I:%M %p")
+    return transactions
+
+def validate_transactions(transactions):
+    """
+    Validates the transactions to ensure they have all required fields.
+    Returns True if all transactions are valid, otherwise returns False.
+    """
+    required_fields = ['account', 'category', 'amount', 'notes', 'datetime']
+    for tx in transactions:
+        if not all(field in tx for field in required_fields):
+            logger.error(f"Transaction missing required fields: {tx} | Required fields: {required_fields}")
+            return False
+        if not isinstance(tx['amount'], (int, float)):
+            logger.error(f"Transaction amount is not a number: {tx['amount']} | It's type is {type(tx['amount'])}")
+            return False
+        if not isinstance(tx['datetime'], datetime):
+            logger.error(f"Transaction datetime is not a valid datetime object: {tx['datetime']} | It's type is {type(tx['datetime'])}")
+            return False
+        if tx.get('type', 'Expense') not in entry_type:
+            logger.error(f"Transaction type '{tx.get('type', 'expense')}' is not valid. Must be one of {entry_type}.")
+            return False
+        if tx['account'] not in accounts_list:
+            logger.error(f"Transaction account '{tx['account']}' is not in the accounts list.")
+            return False
+        if tx['category'] not in (accounts_list + categories_list):
+            logger.error(f"Transaction category '{tx['category']}' is not in the accounts or categories list.")
+            return False
+        
+    logger.info("All transactions are valid.")
+    return True
+
 if __name__ == '__main__':
     # Configure Loguru for real-time, debug-level logging
     logger.remove()
     logger.add(sys.stderr, level="DEBUG", format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>")
 
     my_phone_coords = AppCoordinates()
-    transactions_to_add = [
-        # {
-        #     'account': 'Infinity Tata Neu CC',
-        #     'category': 'Vacation',
-        #     'amount': '1200',
-        #     'notes': 'Trial 1',
-        #     'datetime': datetime(2025, 8, 1, 8, 30),
-        # },
-        {
-            'type': 'transfer',
-            'account': 'Infinity Tata Neu CC',
-            'category': 'Splitwise',  # In case of Transfer, this is the other account
-            'amount': '1200',
-            'notes': 'Trial 3',
-            'datetime': datetime(2025, 8, 9, 19, 30),
-        },
-        {
-            'type': 'income',
-            'account': 'Infinity Tata Neu CC',
-            'category': 'Salary',
-            'amount': '1200',
-            'notes': 'Trial 3',
-            'datetime': datetime(2025, 8, 3, 1, 30),
-        },
-        {
-            'type': 'expense',
-            'account': 'Splitwise',
-            'category': 'Transportation',
-            'amount': '1200',
-            'notes': 'Trial 1',
-            'datetime': datetime.strptime("2025-08-25 08:45 PM", "%Y-%m-%d %I:%M %p"),
-        },
-        # {
-        #     'account': 'HSBC CC',
-        #     'category': 'Vacation',
-        #     'amount': '654.78',
-        #     'notes': 'Trial 4',
-        #     'datetime': datetime.strptime("2025-08-25 04:45 AM", "%Y-%m-%d %I:%M %p"),
-        # },
-        # {
-        #     'account': 'Cash',
-        #     'category': 'Tax',
-        #     'amount': '1800.65',
-        #     'notes': 'Trial - Flight',
-        #     'datetime': datetime(2025, 8, 2, 18, 30),
-        # },
-        # {
-        #     'account': 'SBI Elite CC',
-        #     'category': 'Transportation',
-        #     'amount': '123879.23',
-        #     'notes': 'Trial - Flight',
-        #     'datetime': datetime(2025, 8, 1, 8, 30),
-        # },
-    ]
 
+    # --- NEW: Load transactions from Excel ---
+    # input_excel_file = input("Please enter the full path to your statement .xlsx file: ")
+    # input_excel_file = "C:\\Users\\thaku\\OneDrive - Indian Institute of Technology (BHU), Varanasi\\Attachments\\Downloads\\Statements\\Automated\\04-08-2025\\sample_target_source.xlsx"  # Sample Source For Testing
+    input_excel_file = "C:\\Users\\thaku\\OneDrive - Indian Institute of Technology (BHU), Varanasi\\Attachments\\Downloads\\Statements\Automated\\04-08-2025\\transactions_source.xlsx"
+    # --- NEW: Automatically clean the path copied from Windows Explorer ---
+    input_excel_file = input_excel_file.strip()
+    input_excel_file = input_excel_file.strip('"')
+
+    # transactions_to_add = load_sample_transactions()  # For testing purposes, you can use this instead
+    transactions_to_add = load_transactions_from_excel(input_excel_file)
+
+    if not validate_transactions(transactions_to_add):
+        logger.error("Validation failed for one or more transactions. Please check the logs for details.")
+        sys.exit(1)
+    
+    # logger.debug(f"Type: {transactions_to_add.type()}")
+    # logger.debug(f"{[transaction for transaction in transactions_to_add]}")  # Log the loaded transactions for debugging
+    # transactions_to_add_datetime_serialized = serialize_datetimes(transactions_to_add)
+    # pprint.pprint(transactions_to_add_datetime_serialized)
+
+    if not transactions_to_add:
+        logger.warning("No pending transactions found in the Excel file. Exiting.")
+        sys.exit(0)
+    
     automator = MyMoneyProAutomator(coords=my_phone_coords)
+    # TODO: Remove decimal ".0" - Ex - make "1200.0" to "1200"
+    # TODO: Include Mechanism to mark the transactions as 'Done' in the Excel file after successful entry
 
     logger.info("="*50)
     logger.info("Starting MyMoneyPro Automation...")
