@@ -72,9 +72,12 @@ class AppCoordinates:
         # --- Navigation Coordinates ---
         self.initiate_new_entry_coords = (910, 1970)
         self.save_button_coords = (950, 150)
+        self.income_entry_coords = (174, 380)
+        self.transfer_entry_coords = (853, 382)
 
         # --- Main 'Add Expense' Screen Buttons ---
-        self.account_entry_coords = (300, 650)
+        self.account_entry_left_coords = (300, 650)
+        self.account_entry_right_coords = (800, 650)
         self.category_entry_coords = (800, 650)
         self.date_picker_entry_coords = (400, 2200)
         self.time_picker_entry_coords = (750, 2200)
@@ -273,14 +276,17 @@ class MyMoneyProAutomator:
         logger.error(f"Could not find '{target_text}' after {max_swipes} swipes.")
         return False
 
-    def select_account(self, account_name):
+    def select_account(self, account_name, left_or_right='left'):
         """
         Selects an account from the list.
         It first opens the account selection screen, then uses the intelligent
         find_and_tap_text method to locate and tap the correct account name.
         """
         logger.info(f"--- Selecting Account: {account_name} ---")
-        self._tap(self.coords.account_entry_coords[0], self.coords.account_entry_coords[1], purpose="Open account list")
+        if left_or_right.lower() == 'left':
+            self._tap(self.coords.account_entry_left_coords[0], self.coords.account_entry_left_coords[1], purpose="Open account list(left side)")
+        else:
+            self._tap(self.coords.account_entry_right_coords[0], self.coords.account_entry_right_coords[1], purpose="Open account list (right side)")
         return self._find_and_tap_text(account_name, screen_type='account')
 
     def select_category(self, category_name):
@@ -387,12 +393,12 @@ class MyMoneyProAutomator:
         self._tap(self.coords.notes_section_coords[0], self.coords.notes_section_coords[1], purpose="Enter notes section")
         self._type_text(notes_text)
 
-    def add_expense(self, expense_data):
+    def add_entry(self, expense_data, type):
         """
         Orchestrates the entire process of adding a single expense.
 
         This is the main workflow method that calls all other helper methods in
-        the correct sequence to perform a complete expense entry, from navigating
+        the correct sequence to perform a complete expense/income entry, from navigating
         to the page to filling all fields and saving.
 
         Args:
@@ -402,37 +408,67 @@ class MyMoneyProAutomator:
         Returns:
             bool: True if the expense was added successfully, False otherwise.
         """
+        logger.info(f"--- Adding {expense_data.get('type')}: {expense_data['notes']} ---")
+        try:
+            # 1. Fill in all the details in the specified order.
+            # If any step fails, it will return False and stop this transaction.
+            if not self.select_account(expense_data['account'], left_or_right='left'): return False
+            if type.lower() == 'income' or type.lower() == 'expense':
+                if not self.select_category(expense_data['category']): return False
+            elif type.lower() == 'transfer':
+                if not self.select_account(expense_data['category'], left_or_right='right'): return False  # It's actual value will be an Account in case of Transfer
+
+            self.enter_amount(expense_data['amount'])
+            self.set_date(expense_data['datetime'])
+            self.set_time(expense_data['datetime'])
+            self.enter_notes(expense_data['notes'])
+            
+            # 2. Save the expense and wait for the app to return to the main screen.
+            logger.info("--- Saving Expense ---")
+            self._tap(self.coords.save_button_coords[0], self.coords.save_button_coords[1], purpose="Save expense")
+            time.sleep(self.coords.LONG_DELAY)
+            
+            return True
+        except Exception as e:
+            logger.exception("!!! An unrecoverable error occurred during expense entry !!!")
+            logger.error("You may need to manually press CANCEL on the phone to reset the app state.")
+            return False
+    
+    def begin_entry(self, expense_data):
+        """
+        Starts the process of adding a new expense.
+        This method is called to ensure the app is ready for a new entry.
+        It can be used to reset the app state if needed.
+        """
+        self._check_app_focus() # Security check before every tap
         start_time = time.time()
-        logger.info(f"\n>>> PROCESSING EXPENSE: {expense_data['notes']} <<<")
+        logger.info(f"\n>>> PROCESSING ENTRY: {expense_data['notes']} <<<")
         try:
             # 1. Start from the main screen and tap the button to add a new entry.
             logger.info("--- Navigating to Add Expense screen ---")
             self._tap(self.coords.initiate_new_entry_coords[0], self.coords.initiate_new_entry_coords[1], purpose="Initiate new expense entry")
             time.sleep(self.coords.LONG_DELAY)
 
-            # 2. Fill in all the details in the specified order.
-            # If any step fails, it will return False and stop this transaction.
-            if not self.select_account(expense_data['account']): return False
-            if not self.select_category(expense_data['category']): return False
-            self.enter_amount(expense_data['amount'])
-            self.set_date(expense_data['datetime'])
-            self.set_time(expense_data['datetime'])
-            self.enter_notes(expense_data['notes'])
+            # 2. Check if the entry is an Income or Transfer and navigate accordingly.
+            if expense_data.get('type').lower() == 'income':
+                self._tap(self.coords.income_entry_coords[0], self.coords.income_entry_coords[1], purpose="Select Income Entry")
+            elif expense_data.get('type').lower() == 'transfer':
+                self._tap(self.coords.transfer_entry_coords[0], self.coords.transfer_entry_coords[1], purpose="Select Transfer Entry")
             
-            # 3. Save the expense and wait for the app to return to the main screen.
-            logger.info("--- Saving Expense ---")
-            self._tap(self.coords.save_button_coords[0], self.coords.save_button_coords[1], purpose="Save expense")
-            time.sleep(self.coords.LONG_DELAY)
+            # 3. Now we are on the appropriate Income/Expense/Transfer screen, ready to fill in details.
+            success = self.add_entry(expense_data, type=expense_data.get('type', 'expense'))
             
-            logger.success(">>> SUCCESSFULLY ADDED EXPENSE! <<<")
+            logger.success(">>> SUCCESSFULLY ADDED ENTRY! <<<")
             elapsed_time = time.time() - start_time
             logger.info(f"Time taken for this transaction: {elapsed_time:.2f} seconds")
-            return True
+
+            return success
         except Exception as e:
-            logger.exception("!!! An unrecoverable error occurred during expense entry !!!")
+            logger.exception("An error occurred while processing the entry.")
             logger.error("You may need to manually press CANCEL on the phone to reset the app state.")
             return False
 
+            
 if __name__ == '__main__':
     # Configure Loguru for real-time, debug-level logging
     logger.remove()
@@ -448,18 +484,28 @@ if __name__ == '__main__':
         #     'datetime': datetime(2025, 8, 1, 8, 30),
         # },
         {
+            'type': 'transfer',
+            'account': 'Infinity Tata Neu CC',
+            'category': 'Splitwise',  # In case of Transfer, this is the other account
+            'amount': '1200',
+            'notes': 'Trial 3',
+            'datetime': datetime(2025, 8, 9, 19, 30),
+        },
+        {
+            'type': 'income',
+            'account': 'Infinity Tata Neu CC',
+            'category': 'Salary',
+            'amount': '1200',
+            'notes': 'Trial 3',
+            'datetime': datetime(2025, 8, 3, 1, 30),
+        },
+        {
+            'type': 'expense',
             'account': 'Splitwise',
             'category': 'Transportation',
             'amount': '1200',
             'notes': 'Trial 1',
-            'datetime': datetime.strptime("2025-07-25 08:45 PM", "%Y-%m-%d %I:%M %p"),
-        },
-        {
-            'account': 'Infinity Tata Neu CC',
-            'category': 'Entertainment',
-            'amount': '1200',
-            'notes': 'Trial 3',
-            'datetime': datetime(2025, 8, 3, 1, 30),
+            'datetime': datetime.strptime("2025-08-25 08:45 PM", "%Y-%m-%d %I:%M %p"),
         },
         # {
         #     'account': 'HSBC CC',
@@ -491,11 +537,13 @@ if __name__ == '__main__':
     logger.info("Please ensure your phone is connected, unlocked, and on its MAIN screen.")
     # --- NEW: User confirmation before starting ---
     input("Press Enter to begin...")
-    logger.info("Starting in 3 seconds...")
-    time.sleep(3)
+    for i in range (3, 0, -1):
+        logger.info(f"Starting in {i} seconds...")
+        time.sleep(1)
+    logger.info("="*50)
 
     for transaction in transactions_to_add:
-        success = automator.add_expense(transaction)
+        success = automator.begin_entry(transaction)
         if success:
             logger.success(f"MARKING '{transaction['notes']}' as Done.")
         else:
