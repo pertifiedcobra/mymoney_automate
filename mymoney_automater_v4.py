@@ -216,7 +216,7 @@ class MyMoneyProAutomator:
                     target_words = target_text.split()
                     for k in range(len(clean_words_data) - len(target_words) + 1):
                         phrase_to_check = " ".join([clean_words_data[k+l]['text'] for l in range(len(target_words))])
-                        if target_text.lower() == phrase_to_check.lower():
+                        if target_text.lower() in phrase_to_check.lower():
                             first_word_data = clean_words_data[k]
                             x, y, w, h = first_word_data['left'], first_word_data['top'], first_word_data['width'], first_word_data['height']
                             center_x = (x + w // 2) + crop_amount
@@ -412,13 +412,13 @@ if __name__ == '__main__':
 
     my_phone_coords = AppCoordinates()
     transactions_to_add = [
-        {
-            'account': 'Infinity Tata Neu CC',
-            'category': 'Vacation',
-            'amount': '1200',
-            'notes': 'Trial 1',
-            'datetime': datetime(2025, 8, 1, 8, 30),
-        },
+        # {
+        #     'account': 'Infinity Tata Neu CC',
+        #     'category': 'Vacation',
+        #     'amount': '1200',
+        #     'notes': 'Trial 1',
+        #     'datetime': datetime(2025, 8, 1, 8, 30),
+        # },
         {
             'account': 'Splitwise',
             'category': 'Transportation',
