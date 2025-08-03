@@ -595,8 +595,18 @@ def validate_transactions(transactions):
         if tx['account'] not in accounts_list:
             logger.error(f"Transaction account '{tx['account']}' is not in the accounts list.")
             return False
-        if tx['category'] not in (accounts_list + categories_list):
-            logger.error(f"Transaction category '{tx['category']}' is not in the accounts or categories list.")
+        if tx['type'].lower() == 'transfer':
+            if tx['category'] not in accounts_list:
+                # For Transfer type, category must be in accounts_list
+                logger.error(f"Transaction category '{tx['category']}' is not in the accounts list for transfer type.")
+                return False
+            if tx['account'] == tx['category']:
+                # For Transfer type, account and category must not be the same
+                logger.error(f"Transaction account '{tx['account']}' and category '{tx['category']}' cannot be the same for transfer type.")
+                return False
+        if tx['type'].lower() != 'transfer' and tx['category'] not in categories_list:
+            # For Income and Expense types, category must be in categories_list
+            logger.error(f"Transaction category '{tx['category']}' is not in the categories list.")
             return False
         
     logger.info("All transactions are valid.")
