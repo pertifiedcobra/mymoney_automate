@@ -684,23 +684,80 @@ def calculate_and_print_net_diffs(transactions):
             logger.debug(f"  (Total Credit: {net_credit.get(account, 0):,.2f}, Total Debit: {net_debit.get(account, 0):,.2f})")
     logger.info("="*50)
 
+def run_automation_workflow(transactions_to_add, input_excel_file, main_df):
+    # --- 2. Pre-run Verification ---
+    if not validate_transactions(transactions_to_add):
+        logger.error("Validation failed for one or more transactions. Please check the logs for details.")
+        sys.exit(1)
+    
+    calculate_and_print_net_diffs(transactions_to_add)
+    
+    # --- Debug: Print loaded transactions ---
+    # logger.debug(f"Type: {transactions_to_add.type()}")
+    # logger.debug(f"{[transaction for transaction in transactions_to_add]}")  # Log the loaded transactions for debugging
+    # transactions_to_add_datetime_serialized = serialize_datetimes(transactions_to_add)
+    # pprint.pprint(transactions_to_add_datetime_serialized)
+
+    if not transactions_to_add:
+        logger.warning("No pending transactions found in the Excel file. Exiting.")
+        sys.exit(0)
+    
+    # TODO: Remove decimal ".0" - Ex - make "1200.0" to "1200"
+    # TODO: Include Mechanism to mark the transactions as 'Done' in the Excel file after successful entry
+
+    # --- 3. User Confirmation and Countdown ---
+    logger.info("="*50)
+    logger.info("Starting MyMoneyPro Automation...")
+    logger.info("Please ensure your phone is connected, unlocked, and on its MAIN screen.")
+    # --- User confirmation before starting ---
+    input("Press Enter to begin...")
+    for i in range (3, 0, -1):
+        logger.info(f"Starting in {i} seconds...")
+        time.sleep(1)
+    logger.info("="*50)
+
+    # --- 4. Main Automation Loop ---
+    my_phone_coords = AppCoordinates()
+    automator = MyMoneyProAutomator(coords=my_phone_coords)
+    total_transactions = len(transactions_to_add)
+
+    try:
+        for i, transaction in enumerate(transactions_to_add):
+            logger.info(f"--- Processing transaction {i + 1} of {total_transactions} ---")
+            success = automator.begin_entry(transaction)
+            if success:
+                logger.success(f"MARKING '{transaction['notes']}' as Done.")
+                original_index = transaction['original_index']
+                main_df.loc[original_index, 'status'] = 'Added'
+            else:
+                logger.error(f"STOPPING SCRIPT due to failure on '{transaction['notes']}'.")
+                break
+            time.sleep(my_phone_coords.SHORT_DELAY)
+    finally:
+        # --- 5. Save Progress ---
+        # This block runs whether the loop finishes, breaks, or is interrupted (Ctrl+C)
+        logger.info("="*50)
+        logger.info("Saving updated statuses back to the Excel file...")
+        try:
+            main_df.to_excel(input_excel_file, index=False)
+            logger.success("Successfully saved the updated Excel file.")
+        except Exception as e:
+            logger.exception("Failed to save the updated Excel file.")
 
 if __name__ == '__main__':
     # Configure Loguru for real-time, debug-level logging
     logger.remove()
     logger.add(sys.stderr, level="DEBUG", format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>")
 
-    my_phone_coords = AppCoordinates()
-
     # --- Load transactions from Excel ---
     input_excel_file = input("Please enter the full path to your statement .xlsx file: ")
     # Below is sample path for testing
     # input_excel_file = "C:\\Users\\thaku\\OneDrive - Indian Institute of Technology (BHU), Varanasi\\Attachments\\Downloads\\Statements\\Automated\\04-08-2025\\sample_target_source.xlsx"  # Sample Source For Testing
-    # input_excel_file = "C:\\Users\\thaku\\OneDrive - Indian Institute of Technology (BHU), Varanasi\\Attachments\\Downloads\\Statements\Automated\\04-08-2025\\transactions_source.xlsx"
     # # --- Automatically clean the path copied from Windows Explorer ---
     input_excel_file = input_excel_file.strip()
     input_excel_file = input_excel_file.strip('"')
 
+    # --- 1. Load Data ---
     # --- NEW: Read the main DataFrame once ---
     try:
         main_df = pd.read_excel(input_excel_file)
@@ -715,53 +772,6 @@ if __name__ == '__main__':
     # transactions_to_add = load_sample_transactions()  # For testing purposes, you can use this instead
     transactions_to_add = load_transactions_from_excel(input_excel_file)
 
-    if not validate_transactions(transactions_to_add):
-        logger.error("Validation failed for one or more transactions. Please check the logs for details.")
-        sys.exit(1)
-    
-    calculate_and_print_net_diffs(transactions_to_add)
-    
-    # logger.debug(f"Type: {transactions_to_add.type()}")
-    # logger.debug(f"{[transaction for transaction in transactions_to_add]}")  # Log the loaded transactions for debugging
-    # transactions_to_add_datetime_serialized = serialize_datetimes(transactions_to_add)
-    # pprint.pprint(transactions_to_add_datetime_serialized)
-
-    if not transactions_to_add:
-        logger.warning("No pending transactions found in the Excel file. Exiting.")
-        sys.exit(0)
-    
-    automator = MyMoneyProAutomator(coords=my_phone_coords)
-    # TODO: Remove decimal ".0" - Ex - make "1200.0" to "1200"
-    # TODO: Include Mechanism to mark the transactions as 'Done' in the Excel file after successful entry
-
-    logger.info("="*50)
-    logger.info("Starting MyMoneyPro Automation...")
-    logger.info("Please ensure your phone is connected, unlocked, and on its MAIN screen.")
-    # --- User confirmation before starting ---
-    input("Press Enter to begin...")
-    for i in range (3, 0, -1):
-        logger.info(f"Starting in {i} seconds...")
-        time.sleep(1)
-    logger.info("="*50)
-
-    for transaction in transactions_to_add:
-        success = automator.begin_entry(transaction)
-        if success:
-            logger.success(f"MARKING '{transaction['notes']}' as Done.")
-            # --- NEW: Update the status in the main DataFrame ---
-            original_index = transaction['original_index']
-            main_df.loc[original_index, 'status'] = 'Added'
-        else:
-            logger.error(f"STOPPING SCRIPT due to failure on '{transaction['notes']}'.")
-            break
-        time.sleep(my_phone_coords.SHORT_DELAY)
-    
-    # --- NEW: Save the updated DataFrame back to the Excel file ---
-    try:
-        logger.info("Saving updated statuses back to the Excel file...")
-        main_df.to_excel(input_excel_file, index=False)
-        logger.success("Successfully saved the updated Excel file.")
-    except Exception as e:
-        logger.exception("Failed to save the updated Excel file.")
+    run_automation_workflow(transactions_to_add, input_excel_file, main_df)
 
     logger.info("\nAutomation script finished.")

@@ -14,7 +14,7 @@ import pprint
 import pandas as pd
 import numpy as np
 
-from account_categories_list import accounts_list, entry_type, categories_list
+from account_categories_list import accounts_list, entry_type, income_categories_list, expense_categories_list
 
 # --- Configuration Section ---
 # If Tesseract is not in your system's PATH, uncomment and set the path below.
@@ -22,7 +22,7 @@ from account_categories_list import accounts_list, entry_type, categories_list
 # Example for Windows:
 # pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
-# --- NEW: Caching Class (with Swipe Support) ---
+# --- Caching Class (with Swipe Support) ---
 class UICache:
     """Handles loading and saving UI element coordinates and swipe counts to a JSON file."""
     def __init__(self, cache_file='ui_cache.json'):
@@ -126,7 +126,7 @@ class MyMoneyProAutomator:
     def __init__(self, coords: AppCoordinates):
         self.coords = coords
         self.calendar = calendar.Calendar(firstweekday=calendar.SUNDAY)
-        # NEW: Initialize and load the UI cache
+        # Initialize and load the UI cache
         self.cache = UICache()
         self.cache.load()
 
@@ -165,9 +165,21 @@ class MyMoneyProAutomator:
 
     def _type_text(self, text):
         self._check_app_focus() # Security check
-        formatted_text = text.replace(" ", "%s")
-        logger.debug(f"Typing text: '{text}'")
-        self._execute_adb(f"input text '{formatted_text}'")
+        # Ensure the input is a string
+        text_to_type = str(text)
+
+        # Escape characters that have special meaning inside double quotes for a shell
+        # This makes the command more robust for a wider range of text.
+        formatted_text = text_to_type.replace('"', '\\"')
+        formatted_text = formatted_text.replace("'", "\\'")
+        formatted_text = formatted_text.replace('$', '\\$')
+        
+        # Finally, replace spaces for adb compatibility
+        formatted_text = formatted_text.replace(" ", "%s")
+        
+        logger.debug(f"Typing text: '{text_to_type}'")
+        # Use double quotes to wrap the text, which handles single quotes gracefully.
+        self._execute_adb(f'input text "{formatted_text}"')
         time.sleep(self.coords.SHORT_DELAY)
 
     def _press_key(self, keycode):
@@ -315,9 +327,15 @@ class MyMoneyProAutomator:
         Enters the transaction amount using the on-screen custom keypad.
         It iterates through each character of the amount string and taps the
         corresponding key on the screen.
+        It also removes trailing '.0' from whole numbers.
         """
-        logger.info(f"--- Entering Amount: {amount_str} ---")
-        for char in str(amount_str):
+        # Convert amount to string and check if it's a whole number ending in .0
+        amount_to_type = str(amount_str)
+        if amount_to_type.endswith(".0"):
+            amount_to_type = amount_to_type[:-2] # Remove the ".0"
+
+        logger.info(f"--- Entering Amount: {amount_to_type} (Original: {amount_str}) ---")
+        for char in amount_to_type:
             if char in self.coords.keypad_coords:
                 self._tap(self.coords.keypad_coords[char][0], self.coords.keypad_coords[char][1], purpose=f"Enter amount digit '{char}'")
 
@@ -490,6 +508,8 @@ def load_transactions_from_excel(file_path):
         
         # Filter for pending transactions
         pending_df = df[df['status'].str.lower() == 'pending'].copy()
+        # --- NEW: Add original index to track rows for updating ---
+        pending_df['original_index'] = pending_df.index
         logger.info(f"Found {len(pending_df)} pending transactions to process.")
 
         # Convert 'Datetime' string back to datetime object
@@ -511,58 +531,62 @@ def load_sample_transactions():
         This is useful for quick testing without needing an Excel file.
         """
         transactions_to_add = [
-            # {
-            #     'account': 'Infinity Tata Neu CC',
-            #     'category': 'Vacation',
-            #     'amount': '1200',
-            #     'notes': 'Trial 1',
-            #     'datetime': datetime(2025, 8, 1, 8, 30),
-            # },
             {
-                'type': 'transfer',
+                'type': 'Expense',
+                'account': 'Infinity Tata Neu CC',
+                'category': 'Vacation',
+                'amount': 1200,
+                'notes': 'Trial 1',
+                'datetime': datetime(2025, 8, 1, 8, 30),
+            },
+            {
+                'type': 'Transfer',
                 'account': 'Infinity Tata Neu CC',
                 'category': 'Splitwise',  # In case of Transfer, this is the other account
-                'amount': '1200',
+                'amount': 1200,
                 'notes': 'Trial 3',
                 'datetime': datetime(2025, 8, 9, 19, 30),
             },
-            # {
-            #     'type': 'income',
-            #     'account': 'Infinity Tata Neu CC',
-            #     'category': 'Salary',
-            #     'amount': '1200',
-            #     'notes': 'Trial 3',
-            #     'datetime': datetime(2025, 8, 3, 1, 30),
-            # },
-            # {
-            #     'type': 'expense',
-            #     'account': 'Splitwise',
-            #     'category': 'Transportation',
-            #     'amount': '1200',
-            #     'notes': 'Trial 1',
-            #     'datetime': datetime.strptime("2025-08-25 08:45 PM", "%Y-%m-%d %I:%M %p"),
-            # },
-            # {
-            #     'account': 'HSBC CC',
-            #     'category': 'Vacation',
-            #     'amount': '654.78',
-            #     'notes': 'Trial 4',
-            #     'datetime': datetime.strptime("2025-08-25 04:45 AM", "%Y-%m-%d %I:%M %p"),
-            # },
-            # {
-            #     'account': 'Cash',
-            #     'category': 'Tax',
-            #     'amount': '1800.65',
-            #     'notes': 'Trial - Flight',
-            #     'datetime': datetime(2025, 8, 2, 18, 30),
-            # },
-            # {
-            #     'account': 'SBI Elite CC',
-            #     'category': 'Transportation',
-            #     'amount': '123879.23',
-            #     'notes': 'Trial - Flight',
-            #     'datetime': datetime(2025, 8, 1, 8, 30),
-            # },
+            {
+                'type': 'Income',
+                'account': 'Infinity Tata Neu CC',
+                'category': 'Salary',
+                'amount': 1200,
+                'notes': 'Trial 3',
+                'datetime': datetime(2025, 8, 3, 1, 30),
+            },
+            {
+                'type': 'Expense',
+                'account': 'Splitwise',
+                'category': 'Transportation',
+                'amount': 1200,
+                'notes': 'Trial 1',
+                'datetime': datetime.strptime("2025-08-25 08:45 PM", "%Y-%m-%d %I:%M %p"),
+            },
+            {
+                'type': 'Expense',
+                'account': 'HSBC CC',
+                'category': 'Vacation',
+                'amount': 654.78,
+                'notes': 'Trial 4',
+                'datetime': datetime.strptime("2025-08-25 04:45 AM", "%Y-%m-%d %I:%M %p"),
+            },
+            {
+                'type': 'Expense',
+                'account': 'Cash',
+                'category': 'Tax',
+                'amount': 1800.65,
+                'notes': 'Trial - Flight',
+                'datetime': datetime(2025, 8, 2, 18, 30),
+            },
+            {
+                'type': 'Expense',
+                'account': 'SBI Elite CC',
+                'category': 'Transportation',
+                'amount': 123879.23,
+                'notes': 'Trial - Flight',
+                'datetime': datetime(2025, 8, 1, 8, 30),
+            },
         ]
         return transactions_to_add
 
@@ -589,6 +613,9 @@ def validate_transactions(transactions):
         if not isinstance(tx['datetime'], datetime):
             logger.error(f"Transaction datetime is not a valid datetime object: {tx['datetime']} | It's type is {type(tx['datetime'])}")
             return False
+        if not isinstance(tx['notes'], str):
+            logger.warning(f"Transaction notes field is not a string (found {type(tx['notes'])}). Converting it. Transaction: {tx}")
+            tx['notes'] = str(tx['notes']) # Attempt to convert it to a string
         if tx.get('type', 'Expense') not in entry_type:
             logger.error(f"Transaction type '{tx.get('type', 'expense')}' is not valid. Must be one of {entry_type}.")
             return False
@@ -604,13 +631,59 @@ def validate_transactions(transactions):
                 # For Transfer type, account and category must not be the same
                 logger.error(f"Transaction account '{tx['account']}' and category '{tx['category']}' cannot be the same for transfer type.")
                 return False
-        if tx['type'].lower() != 'transfer' and tx['category'] not in categories_list:
-            # For Income and Expense types, category must be in categories_list
-            logger.error(f"Transaction category '{tx['category']}' is not in the categories list.")
+        if tx['type'].lower() == 'income' and tx['category'] not in income_categories_list:
+            # For Income types, category must be in income categories_list
+            logger.error(f"Transaction category '{tx['category']}' is not in the income categories list.")
+            return False
+        if tx['type'].lower() == 'expense' and tx['category'] not in expense_categories_list:
+            # For Expense types, category must be in expense categories_list
+            logger.error(f"Transaction category '{tx['category']}' is not in the expense categories list.")
             return False
         
     logger.info("All transactions are valid.")
     return True
+
+def calculate_and_print_net_diffs(transactions):
+    """
+    Calculates and prints the net change for each account in the transaction list.
+    This provides a summary for the user to verify before the automation starts.
+    """
+    net_diffs = {}
+    net_credit = {}
+    net_debit = {}
+    for tx in transactions:
+        tx_type = tx.get('type', 'expense').lower()
+        amount = tx['amount']
+        account = tx['account']
+        
+        if tx_type == 'income':
+            net_diffs[account] = net_diffs.get(account, 0) + amount
+            net_credit[account] = net_credit.get(account, 0) + amount
+        elif tx_type == 'expense':
+            net_diffs[account] = net_diffs.get(account, 0) - amount
+            net_debit[account] = net_debit.get(account, 0) + amount
+        elif tx_type == 'transfer':
+            destination_account = tx['category']
+            # Subtract from the source account
+            net_diffs[account] = net_diffs.get(account, 0) - amount
+            net_debit[account] = net_debit.get(account, 0) + amount
+            # Add to the destination account
+            net_diffs[destination_account] = net_diffs.get(destination_account, 0) + amount
+            net_credit[destination_account] = net_credit.get(destination_account, 0) + amount
+
+    logger.info("="*50)
+    logger.info("PRE-RUN VERIFICATION: EXPECTED NET CHANGES")
+    logger.info("="*50)
+    if not net_diffs:
+        logger.info("No transactions to process.")
+    else:
+        for account, diff in net_diffs.items():
+            # Format the number with commas and two decimal places
+            formatted_diff = f"{diff:,.2f}"
+            logger.info(f"{account}: {formatted_diff}")
+            logger.debug(f"  (Total Credit: {net_credit.get(account, 0):,.2f}, Total Debit: {net_debit.get(account, 0):,.2f})")
+    logger.info("="*50)
+
 
 if __name__ == '__main__':
     # Configure Loguru for real-time, debug-level logging
@@ -619,13 +692,25 @@ if __name__ == '__main__':
 
     my_phone_coords = AppCoordinates()
 
-    # --- NEW: Load transactions from Excel ---
-    # input_excel_file = input("Please enter the full path to your statement .xlsx file: ")
+    # --- Load transactions from Excel ---
+    input_excel_file = input("Please enter the full path to your statement .xlsx file: ")
+    # Below is sample path for testing
     # input_excel_file = "C:\\Users\\thaku\\OneDrive - Indian Institute of Technology (BHU), Varanasi\\Attachments\\Downloads\\Statements\\Automated\\04-08-2025\\sample_target_source.xlsx"  # Sample Source For Testing
-    input_excel_file = "C:\\Users\\thaku\\OneDrive - Indian Institute of Technology (BHU), Varanasi\\Attachments\\Downloads\\Statements\Automated\\04-08-2025\\transactions_source.xlsx"
-    # --- NEW: Automatically clean the path copied from Windows Explorer ---
+    # input_excel_file = "C:\\Users\\thaku\\OneDrive - Indian Institute of Technology (BHU), Varanasi\\Attachments\\Downloads\\Statements\Automated\\04-08-2025\\transactions_source.xlsx"
+    # # --- Automatically clean the path copied from Windows Explorer ---
     input_excel_file = input_excel_file.strip()
     input_excel_file = input_excel_file.strip('"')
+
+    # --- NEW: Read the main DataFrame once ---
+    try:
+        main_df = pd.read_excel(input_excel_file)
+        main_df.columns = [col.lower() for col in main_df.columns]
+    except FileNotFoundError:
+        logger.error(f"Input Excel file not found at: {input_excel_file}")
+        sys.exit(1)
+    except Exception as e:
+        logger.exception("Failed to read the main Excel file.")
+        sys.exit(1)
 
     # transactions_to_add = load_sample_transactions()  # For testing purposes, you can use this instead
     transactions_to_add = load_transactions_from_excel(input_excel_file)
@@ -633,6 +718,8 @@ if __name__ == '__main__':
     if not validate_transactions(transactions_to_add):
         logger.error("Validation failed for one or more transactions. Please check the logs for details.")
         sys.exit(1)
+    
+    calculate_and_print_net_diffs(transactions_to_add)
     
     # logger.debug(f"Type: {transactions_to_add.type()}")
     # logger.debug(f"{[transaction for transaction in transactions_to_add]}")  # Log the loaded transactions for debugging
@@ -650,7 +737,7 @@ if __name__ == '__main__':
     logger.info("="*50)
     logger.info("Starting MyMoneyPro Automation...")
     logger.info("Please ensure your phone is connected, unlocked, and on its MAIN screen.")
-    # --- NEW: User confirmation before starting ---
+    # --- User confirmation before starting ---
     input("Press Enter to begin...")
     for i in range (3, 0, -1):
         logger.info(f"Starting in {i} seconds...")
@@ -661,9 +748,20 @@ if __name__ == '__main__':
         success = automator.begin_entry(transaction)
         if success:
             logger.success(f"MARKING '{transaction['notes']}' as Done.")
+            # --- NEW: Update the status in the main DataFrame ---
+            original_index = transaction['original_index']
+            main_df.loc[original_index, 'status'] = 'Added'
         else:
             logger.error(f"STOPPING SCRIPT due to failure on '{transaction['notes']}'.")
             break
         time.sleep(my_phone_coords.SHORT_DELAY)
+    
+    # --- NEW: Save the updated DataFrame back to the Excel file ---
+    try:
+        logger.info("Saving updated statuses back to the Excel file...")
+        main_df.to_excel(input_excel_file, index=False)
+        logger.success("Successfully saved the updated Excel file.")
+    except Exception as e:
+        logger.exception("Failed to save the updated Excel file.")
 
     logger.info("\nAutomation script finished.")
