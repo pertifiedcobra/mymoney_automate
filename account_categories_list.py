@@ -21,10 +21,13 @@ accounts_list = [
     "Splitwise",
 ]
 
-categories_list = [
+income_categories_list = [
     # Income Categories
     "Bonus",    "Capital Gains",    "Others",
     "Refunds",    "Reward",    "Salary",
+]
+
+expense_categories_list = [
     # Expense Categories
     "Beauty",   "Bills",    "Clothing",
     "Education",    "Electronics",    "Entertainment",
