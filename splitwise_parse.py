@@ -89,9 +89,20 @@ def parse_splitwise_html(file_path):
         cost_div = expense.select_one('.cost')
         you_div = expense.select_one('.you')
         
-        # Clean the currency symbol and commas, then convert to float
-        amount_text = you_div.select_one('.amount, .positive, .negative').get_text(strip=True).replace('₹', '').replace(',', '')
-        user_share = float(amount_text)
+        # --- FIX: Handle the "you borrowed nothing" case and add a safety check ---
+        user_share = 0.0
+        you_text = you_div.get_text(strip=True, separator=' ').lower()
+        
+        if 'you borrowed' in you_text and 'nothing' in you_text:
+            user_share = 0.0
+        else:
+            amount_element = you_div.select_one('.amount, .positive, .negative')
+            if amount_element:
+                # Clean the currency symbol and commas, then convert to float
+                amount_text = amount_element.get_text(strip=True).replace('₹', '').replace(',', '')
+                user_share = float(amount_text)
+            else:
+                logger.warning(f"Could not find amount for transaction '{title}'. Assuming share is 0. HTML: {you_div.prettify()}")
 
         paid_by_you = 'you paid' in cost_div.get_text(strip=True, separator=' ').lower()
         
