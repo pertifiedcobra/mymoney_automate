@@ -106,6 +106,12 @@ def parse_splitwise_html(file_path):
 
         paid_by_you = 'you paid' in cost_div.get_text(strip=True, separator=' ').lower()
         
+        # --- NEW: Skip transaction if you are not involved financially ---
+        # This handles cases where someone else paid and your share is zero.
+        if not paid_by_you and user_share < 0.01:
+            logger.debug(f"Skipping transaction '{title}' because you have no share and did not pay.")
+            continue
+
         # --- Generate Transaction Records Based on Logic ---
         base_data = {
             'Datetime': full_datetime.strftime('%Y-%m-%d %I:%M %p'),
