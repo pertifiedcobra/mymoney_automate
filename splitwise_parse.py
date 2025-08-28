@@ -152,6 +152,42 @@ def parse_splitwise_html(file_path):
                 'Amount': user_share,
             })
             transactions.append(expense_entry)
+            
+    # --- NEW: Process settlement payments ---
+    payment_blocks = soup.select('#expenses_list .expense.summary.payment.involved')
+    logger.info(f"Found {len(payment_blocks)} potential settlement entries.")
+    for payment in payment_blocks:
+        datetime_str = payment['data-date']
+        full_datetime = datetime.fromisoformat(datetime_str.replace('Z', '+00:00'))
+        
+        description_element = payment.select_one('.description a')
+        description = description_element.get_text(" ", strip=True) if description_element else "Unknown Payment"
+        
+        amount_element = payment.select_one('.you .positive, .you .negative')
+        amount = float(amount_element.get_text(strip=True).replace('₹', '').replace(',', ''))
+
+        cost_text = payment.select_one('.cost').get_text(strip=True).lower()
+        
+        payment_data = {
+            'Type': 'Transfer',
+            'Amount': amount,
+            'Notes': description,
+            'Datetime': full_datetime.strftime('%Y-%m-%d %I:%M %p'),
+            'Status': 'Pending',
+            'Description': f"Settlement | {description}"
+        }
+
+        if 'you paid' in cost_text:
+            payment_data['Account'] = 'X' # Placeholder for source account
+            payment_data['Category'] = 'Splitwise' # Destination account
+        elif 'you received' in cost_text:
+            payment_data['Account'] = 'Splitwise' # Source account
+            payment_data['Category'] = 'X' # Placeholder for destination account
+        else:
+            continue # Should not happen for '.involved' payments
+
+        transactions.append(payment_data)
+
 
     if not transactions:
         logger.warning("No valid and involved transactions were processed from the file.")
