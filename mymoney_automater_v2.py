@@ -603,45 +603,46 @@ def validate_transactions(transactions):
     Returns True if all transactions are valid, otherwise returns False.
     """
     required_fields = ['account', 'category', 'amount', 'notes', 'datetime']
-    for tx in transactions:
+    flag = True
+    for i, tx in enumerate(transactions):
         if not all(field in tx for field in required_fields):
             logger.error(f"Transaction missing required fields: {tx} | Required fields: {required_fields}")
-            return False
+            flag = False
         if not isinstance(tx['amount'], (int, float)):
             logger.error(f"Transaction amount is not a number: {tx['amount']} | It's type is {type(tx['amount'])}")
-            return False
+            flag = False
         if not isinstance(tx['datetime'], datetime):
             logger.error(f"Transaction datetime is not a valid datetime object: {tx['datetime']} | It's type is {type(tx['datetime'])}")
-            return False
+            flag = False
         if not isinstance(tx['notes'], str):
             logger.warning(f"Transaction notes field is not a string (found {type(tx['notes'])}). Converting it. Transaction: {tx}")
             tx['notes'] = str(tx['notes']) # Attempt to convert it to a string
         if tx.get('type', 'Expense') not in entry_type:
             logger.error(f"Transaction type '{tx.get('type', 'expense')}' is not valid. Must be one of {entry_type}.")
-            return False
+            flag = False
         if tx['account'] not in accounts_list:
             logger.error(f"Transaction account '{tx['account']}' is not in the accounts list.")
-            return False
+            flag = False
         if tx['type'].lower() == 'transfer':
             if tx['category'] not in accounts_list:
                 # For Transfer type, category must be in accounts_list
                 logger.error(f"Transaction category '{tx['category']}' is not in the accounts list for transfer type.")
-                return False
+                flag = False
             if tx['account'] == tx['category']:
                 # For Transfer type, account and category must not be the same
                 logger.error(f"Transaction account '{tx['account']}' and category '{tx['category']}' cannot be the same for transfer type.")
-                return False
+                flag = False
         if tx['type'].lower() == 'income' and tx['category'] not in income_categories_list:
             # For Income types, category must be in income categories_list
             logger.error(f"Transaction category '{tx['category']}' is not in the income categories list.")
-            return False
+            flag = False
         if tx['type'].lower() == 'expense' and tx['category'] not in expense_categories_list:
             # For Expense types, category must be in expense categories_list
             logger.error(f"Transaction category '{tx['category']}' is not in the expense categories list.")
-            return False
+            flag = False
         
     logger.info("All transactions are valid.")
-    return True
+    return flag
 
 def calculate_and_print_net_diffs(transactions):
     """
