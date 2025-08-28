@@ -159,7 +159,7 @@ def parse_splitwise_html(file_path):
             })
             transactions.append(expense_entry)
             
-    # --- NEW: Process settlement payments ---
+    # --- Process settlement payments ---
     payment_blocks = soup.select('#expenses_list .expense.summary.payment.involved')
     logger.info(f"Found {len(payment_blocks)} potential settlement entries.")
     for payment in payment_blocks:
@@ -167,7 +167,10 @@ def parse_splitwise_html(file_path):
         full_datetime = datetime.fromisoformat(datetime_str.replace('Z', '+00:00'))
         
         description_element = payment.select_one('.description a')
-        description = description_element.get_text(" ", strip=True) if description_element else "Unknown Payment"
+        full_description = description_element.get_text(" ", strip=True) if description_element else "Unknown Payment"
+        
+        # --- FIX: Clean the description to remove the group part ---
+        cleaned_description = full_description.split(' in “')[0].strip()
         
         amount_element = payment.select_one('.you .positive, .you .negative')
         amount = float(amount_element.get_text(strip=True).replace('₹', '').replace(',', ''))
@@ -177,10 +180,10 @@ def parse_splitwise_html(file_path):
         payment_data = {
             'Type': 'Transfer',
             'Amount': amount,
-            'Notes': description,
+            'Notes': cleaned_description,
             'Datetime': full_datetime.strftime('%Y-%m-%d %I:%M %p'),
             'Status': 'Pending',
-            'Description': f"Settlement | {description}"
+            'Description': f"Settlement | {cleaned_description}"
         }
 
         if 'you paid' in cost_text:
