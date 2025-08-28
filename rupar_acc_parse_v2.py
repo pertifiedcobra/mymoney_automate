@@ -38,7 +38,7 @@ def apply_categorization_rules(data, row):
     # The script will check each rule in order. The FIRST rule that matches will be applied.
     CATEGORIZATION_RULES = [
         {
-            "keywords": ["Elior India", "Marusa Food", "S Darshan"],
+            "keywords": ["Elior India", "GMS Salad Counter",],
             "category": "Food",
             "notes_from_remarks": True 
         },
@@ -64,13 +64,16 @@ def apply_categorization_rules(data, row):
     transaction_details = str(row.get('Transaction Details', '')).lower()
     remarks = str(row.get('Remarks', ''))
 
+    if not pd.isna(remarks) and remarks.lower() != 'nan':
+        data['Notes'] = remarks[:1].upper() + remarks[1:] if remarks else remarks
+
     for rule in CATEGORIZATION_RULES:
         for keyword in rule['keywords']:
             if keyword.lower() in transaction_details:
                 logger.debug(f"Rule matched for keyword '{keyword}'. Applying category '{rule['category']}'.")
                 data['Category'] = rule['category']
-                if rule['notes_from_remarks'] and remarks and not pd.isna(remarks) and remarks.lower() != 'nan':
-                    data['Notes'] = remarks
+                # if rule['notes_from_remarks'] and remarks and not pd.isna(remarks) and remarks.lower() != 'nan':
+                #     data['Notes'] = remarks
                 # Once a rule is matched for a transaction, we stop checking other rules.
                 return data
     
@@ -116,6 +119,10 @@ def parse_tata_neu_excel(file_path):
     transactions = []
     logger.info(f"Found {len(df)} potential transactions in the sheet.")
 
+    expenses = 0
+    income = 0
+    net_amount = 0
+
     for index, row in df.iterrows():
         try:
             # --- NEW: Filter rows based on the 'Your Account' column ---
@@ -142,6 +149,14 @@ def parse_tata_neu_excel(file_path):
             data['Datetime'] = full_datetime.strftime('%Y-%m-%d %I:%M %p')
 
             original_amount = float(amount_str)
+
+            if original_amount < 0:
+                expenses += abs(original_amount)
+                net_amount -= abs(original_amount)
+            else:
+                income += original_amount
+                net_amount += original_amount
+            
             data['Type'] = 'Income' if original_amount >= 0 else 'Expense'
             data['Amount'] = abs(original_amount)
 
@@ -164,6 +179,9 @@ def parse_tata_neu_excel(file_path):
         except (ValueError, TypeError) as e:
             logger.warning(f"Skipping row {index + header_row_index + 2} due to a parsing error: {e}. Row data: {row.to_dict()}")
             continue
+    logger.info(f"Total Income: {income:.2f}")
+    logger.info(f"Total Expenses: {expenses:.2f}")
+    logger.info(f"Net Amount: {net_amount:.2f}")
     logger.info(f"Processed {len(transactions)} transactions successfully.")
 
     if not transactions:
@@ -190,8 +208,8 @@ def main():
     logger.info("--- Infinity Tata Neu CC Excel Statement to Excel Converter ---")
     logger.warning("Close the file that will be processed, otherwise it may cause an error.")
     
-    # input_excel_file = input("Please enter the full path to your statement .xlsx file: ")
-    input_excel_file = "C:\\Users\\thaku\\OneDrive - Indian Institute of Technology (BHU), Varanasi\\Attachments\\Downloads\\Statements\\Paytm_UPI_Statement_03_Jul'25_-_28_Jul'25.xlsx"
+    input_excel_file = input("Please enter the full path to your statement .xlsx file: ")
+    # input_excel_file = "C:\\Users\\thaku\\OneDrive - Indian Institute of Technology (BHU), Varanasi\\Attachments\\Downloads\\Statements\\Paytm_UPI_Statement_03_Jul'25_-_28_Jul'25.xlsx"
     # --- NEW: Automatically clean the path copied from Windows Explorer ---
     input_excel_file = input_excel_file.strip()
     input_excel_file = input_excel_file.strip('"')
