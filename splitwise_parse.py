@@ -60,8 +60,8 @@ def parse_splitwise_html(file_path):
         return None
 
     transactions = []
-    # Find all expense blocks, excluding payment summaries
-    expense_blocks = soup.select('#expenses_list .expense:not(:has(.payment))')
+    # --- FIX: Use the direct child selector '>' to prevent duplicate processing ---
+    expense_blocks = soup.select('#expenses_list > .expense:not(:has(.payment))')
     logger.info(f"Found {len(expense_blocks)} potential expense entries.")
 
     for expense in expense_blocks:
