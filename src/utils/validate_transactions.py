@@ -44,7 +44,7 @@ def _validate_data_types(tx, i):
 
 def _validate_transaction_type(tx, i):
     """Checks if the transaction type is valid."""
-    if tx.get('type', 'Expense').lower() not in entry_type:
+    if tx.get('type', 'Expense') not in entry_type:
         logger.error(f"Row: {i} | Transaction type '{tx.get('type')}' is not valid. Must be one of {entry_type}.")
         return False
     return True
