@@ -232,14 +232,19 @@ def main():
         pd.set_option('display.max_colwidth', None)
         logger.debug(f"\n{transactions_df}")
         # base_name = os.path.basename(input_html_file).replace('.html', '').replace('.htm', '')
-        # output_excel_file = f"{base_name}_processed.xlsx"
+        base_name = input_html_file.replace('.html', '').replace('.htm', '')
+        output_excel_file = f"{base_name}_processed.xlsx"
+
+        logger.debug(f"Input HTML file: {input_html_file}")
+        logger.debug(f"Base name for output: {base_name}")
+        logger.debug(f"Output Excel file will be: {output_excel_file}")
         
-        # try:
-        #     transactions_df.to_excel(output_excel_file, index=False)
-        #     logger.success(f"Successfully processed and generated {len(transactions_df)} transaction records.")
-        #     logger.success(f"Output saved to: {os.path.abspath(output_excel_file)}")
-        # except Exception as e:
-        #     logger.error(f"Failed to save the Excel file. Error: {e}")
+        try:
+            transactions_df.to_excel(output_excel_file, index=False)
+            logger.success(f"Successfully processed and generated {len(transactions_df)} transaction records.")
+            logger.success(f"Output saved to: {os.path.abspath(output_excel_file)}")
+        except Exception as e:
+            logger.error(f"Failed to save the Excel file. Error: {e}")
 
 if __name__ == '__main__':
     main()
