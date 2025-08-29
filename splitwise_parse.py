@@ -5,20 +5,21 @@ import sys
 import os
 from bs4 import BeautifulSoup
 
-def apply_splitwise_categorization_rules(group_name):
+def apply_splitwise_categorization_rules(description):
     """
     Applies a set of predefined rules to automatically categorize a transaction
-    based on its Splitwise group name.
+    based on its full description string.
 
     Args:
-        group_name (str): The name of the group from Splitwise.
+        description (str): The full description of the transaction 
+                           (e.g., "Groceries | Boiled eggs | Gaurav V. | 91.0").
     
     Returns:
         str: The determined category, or an empty string if no rule matches.
     """
     # --- Define Your Custom Rules Here ---
     # The script will check each rule in order. The FIRST rule that matches will be applied.
-    # The keyword is case-insensitive.
+    # The keyword is case-insensitive and is checked against the full description.
     CATEGORIZATION_RULES = [
         {"keywords": ["Groceries"], "category": "Groceries"},
         # {"keywords": ["Home"], "category": "Home"},
@@ -29,11 +30,11 @@ def apply_splitwise_categorization_rules(group_name):
 
     for rule in CATEGORIZATION_RULES:
         for keyword in rule['keywords']:
-            if keyword.lower() in group_name.lower():
-                logger.debug(f"Rule matched for group '{group_name}' with keyword '{keyword}'. Applying category '{rule['category']}'.")
+            if keyword.lower() in description.lower():
+                logger.debug(f"Rule matched for description '{description}' with keyword '{keyword}'. Applying category '{rule['category']}'.")
                 return rule['category']
     
-    logger.warning(f"No category rule found for group: '{group_name}'. It will be left blank.")
+    logger.warning(f"No category rule found for description: '{description}'. It will be left blank.")
     return ""
 
 def parse_splitwise_html(file_path):
@@ -77,19 +78,26 @@ def parse_splitwise_html(file_path):
         group = group_element.get_text(strip=True) if group_element else "Non-group"
 
         date_element = expense.select_one('.date')
-        # The full datetime is in the 'title' attribute of the date div
         datetime_str = date_element['title'] if date_element and 'title' in date_element.attrs else None
         if not datetime_str:
-            continue # Skip if we can't find a valid datetime
-        
-        # Parse the ISO 8601 format datetime string (e.g., 2025-08-28T14:48:39Z)
-        full_datetime = datetime.fromisoformat(datetime_str.replace('Z', '+00:00'))
+            continue
+
+        # --- NEW: More reliable date parsing ---
+        # Extract time from the full timestamp
+        time_part = datetime.fromisoformat(datetime_str.replace('Z', '+00:00')).strftime('%H:%M:%S')
+        # Extract visible date parts
+        month_text = date_element.get_text(strip=True, separator=' ').split(' ')[0]
+        day_text = date_element.find("div", class_="number").get_text(strip=True)
+        year_text = datetime.fromisoformat(datetime_str.replace('Z', '+00:00')).strftime('%Y')
+        # Combine into a reliable date string and parse
+        reliable_date_str = f"{day_text} {month_text} {year_text} {time_part}"
+        full_datetime = datetime.strptime(reliable_date_str, "%d %b %Y %H:%M:%S")
+
 
         # --- Determine who paid and what the user's share is ---
         cost_div = expense.select_one('.cost')
         you_div = expense.select_one('.you')
         
-        # --- FIX: Handle the "you borrowed nothing" case and add a safety check ---
         user_share = 0.0
         you_text = you_div.get_text(strip=True, separator=' ').lower()
         
@@ -98,69 +106,78 @@ def parse_splitwise_html(file_path):
         else:
             amount_element = you_div.select_one('.amount, .positive, .negative')
             if amount_element:
-                # Clean the currency symbol and commas, then convert to float
                 amount_text = amount_element.get_text(strip=True).replace('₹', '').replace(',', '')
                 user_share = float(amount_text)
             else:
-                logger.warning(f"Could not find amount for transaction '{title}'. Assuming share is 0. HTML: {you_div.prettify()}")
+                logger.warning(f"Could not find amount for transaction '{title}'. Assuming share is 0.")
 
-        paid_by_you = 'you paid' in cost_div.get_text(strip=True, separator=' ').lower()
+        cost_text = cost_div.get_text(strip=True, separator=' ').lower()
+        paid_by_you = 'you paid' in cost_text
+        multiple_payers = 'people paid' in cost_text
         
-        # --- NEW: Skip transaction if you are not involved financially ---
-        # This handles cases where someone else paid and your share is zero.
-        if not paid_by_you and user_share < 0.01:
-            logger.debug(f"Skipping transaction '{title}' because you have no share and did not pay.")
-            continue
+        total_paid_text = cost_div.select_one('.number').get_text(strip=True).replace('₹', '').replace(',', '')
+        total_paid = float(total_paid_text)
+        
+        payer_info = cost_div.get_text(" ", strip=True).split(" paid")[0]
+        payer = "You" if paid_by_you else payer_info
 
         # --- Generate Transaction Records Based on Logic ---
         base_data = {
             'Datetime': full_datetime.strftime('%Y-%m-%d %I:%M %p'),
             'Notes': title,
             'Status': 'Pending',
-            'Description': f"{group} | {title}"
+            'Description': f"{group} | {title} | {payer} | {total_paid}"
         }
 
-        if paid_by_you:
-            # Case 1: You paid. This creates two entries.
-            # Entry A: The portion you personally owe is an expense from Splitwise.
-            total_paid_text = cost_div.select_one('.number').get_text(strip=True).replace('₹', '').replace(',', '')
-            total_paid = float(total_paid_text)
-            your_expense_amount = total_paid - user_share
-            
-            if your_expense_amount > 0.01: # Only add if your share is meaningful
+        if multiple_payers:
+            # Case 1: Multiple people paid. Create a single net expense entry.
+            if user_share > 0.01:
                 expense_entry = base_data.copy()
                 expense_entry.update({
                     'Type': 'Expense',
                     'Account': 'Splitwise',
-                    'Category': apply_splitwise_categorization_rules(group),
+                    'Category': apply_splitwise_categorization_rules(expense_entry['Description']),
+                    'Amount': user_share,
+                })
+                transactions.append(expense_entry)
+        elif paid_by_you:
+            # Case 2: You paid. This creates two entries.
+            your_expense_amount = total_paid - user_share
+            
+            if your_expense_amount > 0.01:
+                expense_entry = base_data.copy()
+                expense_entry.update({
+                    'Type': 'Expense',
+                    'Account': 'Splitwise',
+                    'Category': apply_splitwise_categorization_rules(expense_entry['Description']),
                     'Amount': your_expense_amount,
                 })
                 transactions.append(expense_entry)
 
-            # Entry B: The amount you lent to others is a transfer from your bank to Splitwise.
-            if user_share > 0.01: # Only add if you lent a meaningful amount
+            if user_share > 0.01:
                 transfer_entry = base_data.copy()
                 transfer_entry.update({
                     'Type': 'Transfer',
-                    'Account': 'X', # Placeholder for the source account
-                    'Category': 'Splitwise', # The destination account
+                    'Account': 'X',
+                    'Category': 'Splitwise',
                     'Amount': user_share,
                 })
                 transactions.append(transfer_entry)
 
         else:
-            # Case 2: Someone else paid. This is a simple expense for you.
-            expense_entry = base_data.copy()
-            expense_entry.update({
-                'Type': 'Expense',
-                'Account': 'Splitwise',
-                'Category': apply_splitwise_categorization_rules(group),
-                'Amount': user_share,
-            })
-            transactions.append(expense_entry)
+            # Case 3: Someone else paid. This is a simple expense for you.
+            if user_share > 0.01:
+                expense_entry = base_data.copy()
+                expense_entry.update({
+                    'Type': 'Expense',
+                    'Account': 'Splitwise',
+                    'Category': apply_splitwise_categorization_rules(expense_entry['Description']),
+                    'Amount': user_share,
+                })
+                transactions.append(expense_entry)
             
     # --- Process settlement payments ---
-    payment_blocks = soup.select('#expenses_list .expense.summary.payment.involved')
+    payment_blocks = soup.select('#expenses_list > .expense.summary.payment.involved')
     logger.info(f"Found {len(payment_blocks)} potential settlement entries.")
     for payment in payment_blocks:
         datetime_str = payment['data-date']
@@ -169,7 +186,6 @@ def parse_splitwise_html(file_path):
         description_element = payment.select_one('.description a')
         full_description = description_element.get_text(" ", strip=True) if description_element else "Unknown Payment"
         
-        # --- FIX: Clean the description to remove the group part ---
         cleaned_description = full_description.split(' in “')[0].strip()
         
         amount_element = payment.select_one('.you .positive, .you .negative')
@@ -187,13 +203,13 @@ def parse_splitwise_html(file_path):
         }
 
         if 'you paid' in cost_text:
-            payment_data['Account'] = 'X' # Placeholder for source account
-            payment_data['Category'] = 'Splitwise' # Destination account
+            payment_data['Account'] = 'X'
+            payment_data['Category'] = 'Splitwise'
         elif 'you received' in cost_text:
-            payment_data['Account'] = 'Splitwise' # Source account
-            payment_data['Category'] = 'X' # Placeholder for destination account
+            payment_data['Account'] = 'Splitwise'
+            payment_data['Category'] = 'X'
         else:
-            continue # Should not happen for '.involved' payments
+            continue
 
         transactions.append(payment_data)
 
