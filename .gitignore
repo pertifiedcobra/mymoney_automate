@@ -1,0 +1,7 @@
+**__pycache__**/
+*.pyc
+.env
+.vscode/
+.DS_Store
+.idea/
+mymoney_automater.log
