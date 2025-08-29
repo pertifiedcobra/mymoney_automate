@@ -10,6 +10,7 @@ class AppCoordinates:
         # --- App Specific Configuration ---
         # CRITICAL: You must find and set the package name for MyMoneyPro.
         # See the README for instructions on how to find this.
+        self.phone_name = "Samsung S24 Ultra"
         self.app_package_name = "com.raha.app.mymoney.pro"
 
         # --- General Timings ---
@@ -17,8 +18,8 @@ class AppCoordinates:
         self.LONG_DELAY = 0.6
 
         # --- Navigation Coordinates ---
-        self.initiate_new_entry_coords = (910, 1970) 
-        self.save_button_coords = (950, 150)
+        self.initiate_new_entry_coords = (0, 0) 
+        self.save_button_coords = (0, 0)
 
         self.income_entry_coords = (174, 380)
         self.transfer_entry_coords = (853, 382)

@@ -5,6 +5,7 @@ import sys
 import os
 from bs4 import BeautifulSoup
 
+
 def apply_splitwise_categorization_rules(description):
     """
     Applies a set of predefined rules to automatically categorize a transaction

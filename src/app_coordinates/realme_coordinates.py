@@ -9,6 +9,7 @@ class AppCoordinates:
         # --- App Specific Configuration ---
         # CRITICAL: You must find and set the package name for MyMoneyPro.
         # See the README for instructions on how to find this.
+        self.phone_name = "Realme 7"
         self.app_package_name = "com.raha.app.mymoney.pro"
 
         # --- General Timings ---

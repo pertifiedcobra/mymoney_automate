@@ -3,7 +3,7 @@ from datetime import datetime
 from loguru import logger
 import sys
 import os
-import math
+
 
 def find_header_row(df):
     """
