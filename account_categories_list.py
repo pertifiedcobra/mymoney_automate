@@ -34,7 +34,7 @@ expense_categories_list = [
     "Food",    "Gifts",    "Groceries",
     "Health",    "Home",    "Insurance",
     "Others",    "Parents",    "Pet",
-    "Rent",    "Snacks",    "Social",
+    "House-Rent",    "Snacks",    "Social",
     "Sports",    "Tax",    "Transportation",
     "Vacation",
 ]
