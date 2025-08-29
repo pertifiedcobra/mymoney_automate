@@ -163,24 +163,68 @@ class MyMoneyProAutomator:
         self._execute_adb(f"input tap {x} {y}")
         time.sleep(self.coords.SHORT_DELAY)
 
+    def _escape_shell_text(self, text):
+        """
+        Escapes characters in a string that are special to the adb shell using regex,
+        mimicking the provided JavaScript one-liner.
+        """
+        text_to_escape = str(text)
+        
+        # This regex pattern finds any of the special characters listed inside the brackets.
+        # The characters are: ( ) < > | ; & * \ ~ " ' $
+        pattern = r'([()<>|;&*\\~"\'$])'
+        
+        # re.sub finds all matches of the pattern and replaces them.
+        # r'\\\1' is the replacement string:
+        # \\ -> A literal backslash
+        # \1 -> The character that was matched by the pattern
+        escaped_text = re.sub(pattern, r'\\\1', text_to_escape)
+        
+        return escaped_text
+
+    # This has proven to work well, but the regex version above is more comprehensive.
+    # def _escape_shell_text(self, text):
+    #     """
+    #     Escapes characters in a string that are special to the adb shell.
+    #     This is crucial for safely typing text that contains quotes, parentheses, etc.
+    #     """
+    #     # List of characters that need to be escaped with a backslash
+    #     text = text.replace('\\', '\\\\')
+    #     text = text.replace('"', '\\"')
+    #     text = text.replace("'", "\\'")
+    #     special_chars = ["(", ")", "&", "|", ";", "$", "`", "<", ">"]
+        
+    #     for char in special_chars:
+    #         text = text.replace(char, f"\\{char}")
+        
+    #     return text
+    
     def _type_text(self, text):
         self._check_app_focus() # Security check
-        # Ensure the input is a string
-        text_to_type = str(text)
-
-        # Escape characters that have special meaning inside double quotes for a shell
-        # This makes the command more robust for a wider range of text.
-        formatted_text = text_to_type.replace('"', '\\"')
-        formatted_text = formatted_text.replace("'", "\\'")
-        formatted_text = formatted_text.replace('$', '\\$')
         
-        # Finally, replace spaces for adb compatibility
+        # Use the new helper method to handle all special characters
+        formatted_text = self._escape_shell_text(text)
+        
+        # Replace spaces for adb compatibility
         formatted_text = formatted_text.replace(" ", "%s")
         
-        logger.debug(f"Typing text: '{text_to_type}'")
-        # Use double quotes to wrap the text, which handles single quotes gracefully.
+        logger.debug(f"Typing text: '{text}' (Formatted: {formatted_text})")
+        # The command is now more robust as it handles a wide range of special characters
         self._execute_adb(f'input text "{formatted_text}"')
         time.sleep(self.coords.SHORT_DELAY)
+
+    # def _type_text(self, text):
+    #     self._check_app_focus() # Security check
+    #     # Ensure the input is a string
+    #     text_to_type = str(text)
+        
+    #     # Finally, replace spaces for adb compatibility
+    #     formatted_text = formatted_text.replace(" ", "%s")
+        
+    #     logger.debug(f"Typing text: '{text_to_type}'")
+    #     # Use double quotes to wrap the text, which handles single quotes gracefully.
+    #     self._execute_adb(f'input text "{formatted_text}"')
+    #     time.sleep(self.coords.SHORT_DELAY)
 
     def _press_key(self, keycode):
         self._check_app_focus() # Security check
