@@ -15,6 +15,8 @@ import pandas as pd
 import numpy as np
 
 from account_categories_list import accounts_list, entry_type, income_categories_list, expense_categories_list
+from realme_coordinates import AppCoordinates  # Uncomment to use Realme coordinates
+# from s24u_coordinates import AppCoordinates  # Uncomment to use Samsung S24U coordinates
 
 # --- Configuration Section ---
 # If Tesseract is not in your system's PATH, uncomment and set the path below.
@@ -55,68 +57,6 @@ class UICache:
     def set(self, name, swipe_count, coords):
         """Sets the location data for a given name in the cache."""
         self.locations[name] = {"swipes": swipe_count, "coords": coords}
-
-
-# --- App Coordinates & Configuration ---
-class AppCoordinates:
-    """
-    A dedicated class to store all screen coordinates and configuration.
-    This makes the script portable to different devices and screen resolutions.
-    """
-    def __init__(self):
-        # --- App Specific Configuration ---
-        # CRITICAL: You must find and set the package name for MyMoneyPro.
-        # See the README for instructions on how to find this.
-        self.app_package_name = "com.raha.app.mymoney.pro"
-
-        # --- General Timings ---
-        self.SHORT_DELAY = 0.1
-        self.LONG_DELAY = 0.6
-
-        # --- Navigation Coordinates ---
-        self.initiate_new_entry_coords = (910, 1970)
-        self.save_button_coords = (950, 150)
-
-        self.income_entry_coords = (174, 380)
-        self.transfer_entry_coords = (853, 382)
-
-        # --- Main 'Add Expense' Screen Buttons ---
-        self.account_entry_left_coords = (300, 650)
-        self.account_entry_right_coords = (800, 650)
-        self.category_entry_coords = (800, 650)
-        self.date_picker_entry_coords = (400, 2200)
-        self.time_picker_entry_coords = (750, 2200)
-        self.notes_section_coords = (500, 950)
-
-        # --- Amount Keypad ---
-        self.keypad_coords = {
-            '7': (450, 1450), '8': (650, 1450), '9': (950, 1450),
-            '4': (450, 1650), '5': (650, 1650), '6': (950, 1650),
-            '1': (450, 1850), '2': (650, 1850), '3': (950, 1850),
-            '0': (450, 2069), '.': (650, 2039),
-        }
-        self.backspace_coords = (950, 1250)
-
-        # --- Date Picker Dialog ---
-        self.date_month_change_coords = {"next": (867, 860), "prev": (216, 860)}
-        self.date_grid_x_coords = [230, 330, 430, 530, 630, 730, 830]
-        self.date_grid_y_coords = [1100, 1220, 1340, 1460, 1580, 1700]
-        self.date_ok_coords = (810, 1885)
-
-        # --- Time Picker Dialog ---
-        self.time_keypad_mode_coords = (209, 1731)
-        self.time_hour_coords = (256, 1026)
-        self.time_minute_coords = (426, 1026)
-        self.time_ampm_selector_coords = (838, 1299)
-        self.time_ampm_coords = {'AM': (705, 1333), 'PM': (700, 1457)}
-        self.time_ok_coords = (852, 1542)
-
-        # --- Scrolling / Swiping ---
-        self.swipe_coords = (500, 1800, 500, 800, 300)
-        
-        # --- OCR Configuration ---
-        self.account_list_crop_pixels = 240
-        self.category_name_crop = 10  # Crop length for category names that are too long
 
 
 class MyMoneyProAutomator:
@@ -163,24 +103,68 @@ class MyMoneyProAutomator:
         self._execute_adb(f"input tap {x} {y}")
         time.sleep(self.coords.SHORT_DELAY)
 
+    def _escape_shell_text(self, text):
+        """
+        Escapes characters in a string that are special to the adb shell using regex,
+        mimicking the provided JavaScript one-liner.
+        """
+        text_to_escape = str(text)
+        
+        # This regex pattern finds any of the special characters listed inside the brackets.
+        # The characters are: ( ) < > | ; & * \ ~ " ' $
+        pattern = r'([()<>|;&*\\~"\'$])'
+        
+        # re.sub finds all matches of the pattern and replaces them.
+        # r'\\\1' is the replacement string:
+        # \\ -> A literal backslash
+        # \1 -> The character that was matched by the pattern
+        escaped_text = re.sub(pattern, r'\\\1', text_to_escape)
+        
+        return escaped_text
+
+    # This has proven to work well, but the regex version above is more comprehensive.
+    # def _escape_shell_text(self, text):
+    #     """
+    #     Escapes characters in a string that are special to the adb shell.
+    #     This is crucial for safely typing text that contains quotes, parentheses, etc.
+    #     """
+    #     # List of characters that need to be escaped with a backslash
+    #     text = text.replace('\\', '\\\\')
+    #     text = text.replace('"', '\\"')
+    #     text = text.replace("'", "\\'")
+    #     special_chars = ["(", ")", "&", "|", ";", "$", "`", "<", ">"]
+        
+    #     for char in special_chars:
+    #         text = text.replace(char, f"\\{char}")
+        
+    #     return text
+    
     def _type_text(self, text):
         self._check_app_focus() # Security check
-        # Ensure the input is a string
-        text_to_type = str(text)
-
-        # Escape characters that have special meaning inside double quotes for a shell
-        # This makes the command more robust for a wider range of text.
-        formatted_text = text_to_type.replace('"', '\\"')
-        formatted_text = formatted_text.replace("'", "\\'")
-        formatted_text = formatted_text.replace('$', '\\$')
         
-        # Finally, replace spaces for adb compatibility
+        # Use the new helper method to handle all special characters
+        formatted_text = self._escape_shell_text(text)
+        
+        # Replace spaces for adb compatibility
         formatted_text = formatted_text.replace(" ", "%s")
         
-        logger.debug(f"Typing text: '{text_to_type}'")
-        # Use double quotes to wrap the text, which handles single quotes gracefully.
+        logger.debug(f"Typing text: '{text}' (Formatted: {formatted_text})")
+        # The command is now more robust as it handles a wide range of special characters
         self._execute_adb(f'input text "{formatted_text}"')
         time.sleep(self.coords.SHORT_DELAY)
+
+    # def _type_text(self, text):
+    #     self._check_app_focus() # Security check
+    #     # Ensure the input is a string
+    #     text_to_type = str(text)
+        
+    #     # Finally, replace spaces for adb compatibility
+    #     formatted_text = formatted_text.replace(" ", "%s")
+        
+    #     logger.debug(f"Typing text: '{text_to_type}'")
+    #     # Use double quotes to wrap the text, which handles single quotes gracefully.
+    #     self._execute_adb(f'input text "{formatted_text}"')
+    #     time.sleep(self.coords.SHORT_DELAY)
 
     def _press_key(self, keycode):
         self._check_app_focus() # Security check
@@ -603,45 +587,46 @@ def validate_transactions(transactions):
     Returns True if all transactions are valid, otherwise returns False.
     """
     required_fields = ['account', 'category', 'amount', 'notes', 'datetime']
-    for tx in transactions:
+    flag = True
+    for i, tx in enumerate(transactions):
         if not all(field in tx for field in required_fields):
-            logger.error(f"Transaction missing required fields: {tx} | Required fields: {required_fields}")
-            return False
+            logger.error(f"Row: {i} | Transaction missing required fields: {tx} | Required fields: {required_fields}")
+            flag = False
         if not isinstance(tx['amount'], (int, float)):
-            logger.error(f"Transaction amount is not a number: {tx['amount']} | It's type is {type(tx['amount'])}")
-            return False
+            logger.error(f"Row: {i} | Transaction amount is not a number: {tx['amount']} | It's type is {type(tx['amount'])}")
+            flag = False
         if not isinstance(tx['datetime'], datetime):
-            logger.error(f"Transaction datetime is not a valid datetime object: {tx['datetime']} | It's type is {type(tx['datetime'])}")
-            return False
+            logger.error(f"Row: {i} | Transaction datetime is not a valid datetime object: {tx['datetime']} | It's type is {type(tx['datetime'])}")
+            flag = False
         if not isinstance(tx['notes'], str):
-            logger.warning(f"Transaction notes field is not a string (found {type(tx['notes'])}). Converting it. Transaction: {tx}")
+            logger.warning(f"Row: {i} | Transaction notes field is not a string (found {type(tx['notes'])}). Converting it. Transaction: {tx}")
             tx['notes'] = str(tx['notes']) # Attempt to convert it to a string
         if tx.get('type', 'Expense') not in entry_type:
-            logger.error(f"Transaction type '{tx.get('type', 'expense')}' is not valid. Must be one of {entry_type}.")
-            return False
+            logger.error(f"Row: {i} | Transaction type '{tx.get('type', 'expense')}' is not valid. Must be one of {entry_type}.")
+            flag = False
         if tx['account'] not in accounts_list:
-            logger.error(f"Transaction account '{tx['account']}' is not in the accounts list.")
-            return False
+            logger.error(f"Row: {i} | Transaction account '{tx['account']}' is not in the accounts list.")
+            flag = False
         if tx['type'].lower() == 'transfer':
             if tx['category'] not in accounts_list:
                 # For Transfer type, category must be in accounts_list
-                logger.error(f"Transaction category '{tx['category']}' is not in the accounts list for transfer type.")
-                return False
+                logger.error(f"Row: {i} | Transaction category '{tx['category']}' is not in the accounts list for transfer type.")
+                flag = False
             if tx['account'] == tx['category']:
                 # For Transfer type, account and category must not be the same
-                logger.error(f"Transaction account '{tx['account']}' and category '{tx['category']}' cannot be the same for transfer type.")
-                return False
+                logger.error(f"Row: {i} | Transaction account '{tx['account']}' and category '{tx['category']}' cannot be the same for transfer type.")
+                flag = False
         if tx['type'].lower() == 'income' and tx['category'] not in income_categories_list:
             # For Income types, category must be in income categories_list
-            logger.error(f"Transaction category '{tx['category']}' is not in the income categories list.")
-            return False
+            logger.error(f"Row: {i} | Transaction category '{tx['category']}' is not in the income categories list.")
+            flag = False
         if tx['type'].lower() == 'expense' and tx['category'] not in expense_categories_list:
             # For Expense types, category must be in expense categories_list
-            logger.error(f"Transaction category '{tx['category']}' is not in the expense categories list.")
-            return False
+            logger.error(f"Row: {i} | Transaction category '{tx['category']}' is not in the expense categories list.")
+            flag = False
         
     logger.info("All transactions are valid.")
-    return True
+    return flag
 
 def calculate_and_print_net_diffs(transactions):
     """
@@ -684,23 +669,80 @@ def calculate_and_print_net_diffs(transactions):
             logger.debug(f"  (Total Credit: {net_credit.get(account, 0):,.2f}, Total Debit: {net_debit.get(account, 0):,.2f})")
     logger.info("="*50)
 
+def run_automation_workflow(transactions_to_add, input_excel_file, main_df):
+    # --- 2. Pre-run Verification ---
+    if not validate_transactions(transactions_to_add):
+        logger.error("Validation failed for one or more transactions. Please check the logs for details.")
+        sys.exit(1)
+    
+    calculate_and_print_net_diffs(transactions_to_add)
+    
+    # --- Debug: Print loaded transactions ---
+    # logger.debug(f"Type: {transactions_to_add.type()}")
+    # logger.debug(f"{[transaction for transaction in transactions_to_add]}")  # Log the loaded transactions for debugging
+    # transactions_to_add_datetime_serialized = serialize_datetimes(transactions_to_add)
+    # pprint.pprint(transactions_to_add_datetime_serialized)
+
+    if not transactions_to_add:
+        logger.warning("No pending transactions found in the Excel file. Exiting.")
+        sys.exit(0)
+    
+    # TODO: Remove decimal ".0" - Ex - make "1200.0" to "1200"
+    # TODO: Include Mechanism to mark the transactions as 'Done' in the Excel file after successful entry
+
+    # --- 3. User Confirmation and Countdown ---
+    logger.info("="*50)
+    logger.info("Starting MyMoneyPro Automation...")
+    logger.info("Please ensure your phone is connected, unlocked, and on its MAIN screen.")
+    # --- User confirmation before starting ---
+    input("Press Enter to begin...")
+    for i in range (3, 0, -1):
+        logger.info(f"Starting in {i} seconds...")
+        time.sleep(1)
+    logger.info("="*50)
+
+    # --- 4. Main Automation Loop ---
+    my_phone_coords = AppCoordinates()
+    automator = MyMoneyProAutomator(coords=my_phone_coords)
+    total_transactions = len(transactions_to_add)
+
+    try:
+        for i, transaction in enumerate(transactions_to_add):
+            logger.info(f"--- Processing transaction {i + 1} of {total_transactions} ---")
+            success = automator.begin_entry(transaction)
+            if success:
+                logger.success(f"MARKING '{transaction['notes']}' as Done.")
+                original_index = transaction['original_index']
+                main_df.loc[original_index, 'status'] = 'Added'
+            else:
+                logger.error(f"STOPPING SCRIPT due to failure on '{transaction['notes']}'.")
+                break
+            time.sleep(my_phone_coords.SHORT_DELAY)
+    finally:
+        # --- 5. Save Progress ---
+        # This block runs whether the loop finishes, breaks, or is interrupted (Ctrl+C)
+        logger.info("="*50)
+        logger.info("Saving updated statuses back to the Excel file...")
+        try:
+            main_df.to_excel(input_excel_file, index=False)
+            logger.success("Successfully saved the updated Excel file.")
+        except Exception as e:
+            logger.exception("Failed to save the updated Excel file.")
 
 if __name__ == '__main__':
     # Configure Loguru for real-time, debug-level logging
     logger.remove()
     logger.add(sys.stderr, level="DEBUG", format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>")
 
-    my_phone_coords = AppCoordinates()
-
     # --- Load transactions from Excel ---
     input_excel_file = input("Please enter the full path to your statement .xlsx file: ")
     # Below is sample path for testing
     # input_excel_file = "C:\\Users\\thaku\\OneDrive - Indian Institute of Technology (BHU), Varanasi\\Attachments\\Downloads\\Statements\\Automated\\04-08-2025\\sample_target_source.xlsx"  # Sample Source For Testing
-    # input_excel_file = "C:\\Users\\thaku\\OneDrive - Indian Institute of Technology (BHU), Varanasi\\Attachments\\Downloads\\Statements\Automated\\04-08-2025\\transactions_source.xlsx"
     # # --- Automatically clean the path copied from Windows Explorer ---
     input_excel_file = input_excel_file.strip()
     input_excel_file = input_excel_file.strip('"')
 
+    # --- 1. Load Data ---
     # --- NEW: Read the main DataFrame once ---
     try:
         main_df = pd.read_excel(input_excel_file)
@@ -715,53 +757,6 @@ if __name__ == '__main__':
     # transactions_to_add = load_sample_transactions()  # For testing purposes, you can use this instead
     transactions_to_add = load_transactions_from_excel(input_excel_file)
 
-    if not validate_transactions(transactions_to_add):
-        logger.error("Validation failed for one or more transactions. Please check the logs for details.")
-        sys.exit(1)
-    
-    calculate_and_print_net_diffs(transactions_to_add)
-    
-    # logger.debug(f"Type: {transactions_to_add.type()}")
-    # logger.debug(f"{[transaction for transaction in transactions_to_add]}")  # Log the loaded transactions for debugging
-    # transactions_to_add_datetime_serialized = serialize_datetimes(transactions_to_add)
-    # pprint.pprint(transactions_to_add_datetime_serialized)
-
-    if not transactions_to_add:
-        logger.warning("No pending transactions found in the Excel file. Exiting.")
-        sys.exit(0)
-    
-    automator = MyMoneyProAutomator(coords=my_phone_coords)
-    # TODO: Remove decimal ".0" - Ex - make "1200.0" to "1200"
-    # TODO: Include Mechanism to mark the transactions as 'Done' in the Excel file after successful entry
-
-    logger.info("="*50)
-    logger.info("Starting MyMoneyPro Automation...")
-    logger.info("Please ensure your phone is connected, unlocked, and on its MAIN screen.")
-    # --- User confirmation before starting ---
-    input("Press Enter to begin...")
-    for i in range (3, 0, -1):
-        logger.info(f"Starting in {i} seconds...")
-        time.sleep(1)
-    logger.info("="*50)
-
-    for transaction in transactions_to_add:
-        success = automator.begin_entry(transaction)
-        if success:
-            logger.success(f"MARKING '{transaction['notes']}' as Done.")
-            # --- NEW: Update the status in the main DataFrame ---
-            original_index = transaction['original_index']
-            main_df.loc[original_index, 'status'] = 'Added'
-        else:
-            logger.error(f"STOPPING SCRIPT due to failure on '{transaction['notes']}'.")
-            break
-        time.sleep(my_phone_coords.SHORT_DELAY)
-    
-    # --- NEW: Save the updated DataFrame back to the Excel file ---
-    try:
-        logger.info("Saving updated statuses back to the Excel file...")
-        main_df.to_excel(input_excel_file, index=False)
-        logger.success("Successfully saved the updated Excel file.")
-    except Exception as e:
-        logger.exception("Failed to save the updated Excel file.")
+    run_automation_workflow(transactions_to_add, input_excel_file, main_df)
 
     logger.info("\nAutomation script finished.")
