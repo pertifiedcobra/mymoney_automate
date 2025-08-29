@@ -18,7 +18,7 @@ from src.utils.account_categories_list import accounts_list, entry_type, income_
 from src.app_coordinates.realme_coordinates import AppCoordinates  # Uncomment to use Realme coordinates
 # from src.app_coordinates.s24u_coordinates import AppCoordinates  # Uncomment to use Samsung S24U coordinates
 
-from src.mymoney_automater_v2 import MyMoneyProAutomator
+from src.mymoneypro_automator import MyMoneyProAutomator
 from src.data_loader import load_transactions_from_excel, load_sample_transactions
 from src.utils.validate_transactions import validate_transactions
 from src.utils.misc import serialize_datetimes, calculate_and_print_net_diffs
@@ -69,8 +69,8 @@ def run_automation_workflow(transactions_to_add, input_excel_file=None, main_df=
             success = automator.begin_entry(transaction)
             if success:
                 logger.success(f"MARKING '{transaction['notes']}' as Done.")
-                original_index = transaction['original_index']
-                if main_df is not None and original_index is not None:
+                if main_df:
+                    original_index = transaction['original_index']
                     main_df.loc[original_index, 'status'] = 'Added'
             else:
                 logger.error(f"STOPPING SCRIPT due to failure on '{transaction['notes']}'.")
@@ -79,7 +79,7 @@ def run_automation_workflow(transactions_to_add, input_excel_file=None, main_df=
     finally:
         # --- 5. Save Progress ---
         # This block runs whether the loop finishes, breaks, or is interrupted (Ctrl+C)
-        if input_excel_file and main_df is not None:
+        if input_excel_file and main_df:
             logger.info("="*50)
             logger.info("Saving updated statuses back to the Excel file...")
             try:
@@ -95,7 +95,7 @@ if __name__ == '__main__':
 
     input_excel_file = None
     main_df = None
-    
+
     # --- Load transactions from Excel ---
     # input_excel_file = input("Please enter the full path to your statement .xlsx file: ")
     # Below is sample path for testing
