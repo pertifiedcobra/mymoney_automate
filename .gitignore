@@ -7,3 +7,4 @@
 mymoney_automater.log
 **_cache.json
 *.xlsx
+*venv
