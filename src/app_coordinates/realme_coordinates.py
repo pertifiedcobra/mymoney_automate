@@ -87,7 +87,7 @@ class Realme7Coordinates(BaseAppCoordinates):
         # --- OCR Configuration ---
         # Number of pixels from the left of the screen on the 'Accounts' page to remove logos(from left) and account balance (from right).
         self.account_list_crop_left_pixels = 240  # Starting X coordinate for cropping
-        self.account_list_crop_right_pixels = 875  # Ending X coordinate for cropping
+        self.account_list_crop_right_pixels = 730  # Ending X coordinate for cropping
         # Number of pixels to crop from the top of the screen on the 'Accounts' page to remove unnecessary text.
         self.account_list_crop_top_pixels = 260
         # Number of characters to use when searching for long category names that get truncated with '...'.
