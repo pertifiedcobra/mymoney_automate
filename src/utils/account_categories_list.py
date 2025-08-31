@@ -29,12 +29,12 @@ income_categories_list = [
 
 expense_categories_list = [
     # Expense Categories
-    "Beauty",   "Bills",    "Clothing",
-    "Education",    "Electronics",    "Entertainment",
-    "Food",    "Gifts",    "Groceries",
-    "Health",    "Home",    "Insurance",
-    "Others",    "Parents",    "Pet",
-    "House-Rent",    "Snacks",    "Social",
-    "Sports",    "Tax",    "Transportation",
+    "Beauty",       "Bills",        "Clothing",
+    "Education",    "Electronics",  "Entertainment",
+    "Food",         "Gifts",        "Groceries",
+    "Health",       "Home",         "House-Rent", 
+    "Insurance",    "Others",       "Parents",
+    "Pet",          "Snacks",       "Social",
+    "Sports",       "Tax",          "Transportation",
     "Vacation",
 ]
