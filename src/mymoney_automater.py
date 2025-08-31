@@ -737,7 +737,6 @@ if __name__ == '__main__':
     # --- Load transactions from Excel ---
     input_excel_file = input("Please enter the full path to your statement .xlsx file: ")
     # Below is sample path for testing
-    # input_excel_file = "C:\\Users\\thaku\\OneDrive - Indian Institute of Technology (BHU), Varanasi\\Attachments\\Downloads\\Statements\\Automated\\04-08-2025\\sample_target_source.xlsx"  # Sample Source For Testing
     # # --- Automatically clean the path copied from Windows Explorer ---
     input_excel_file = input_excel_file.strip()
     input_excel_file = input_excel_file.strip('"')
