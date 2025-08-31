@@ -13,7 +13,7 @@ class S24UCoordinates(BaseAppCoordinates):
         # CRITICAL: You must find and set the package name for MyMoneyPro.
         # See the README for instructions on how to find this.
         self.phone_name = "Samsung S24 Ultra"
-        self.model_name = "RZCY71GV4TJ"
+        self.model_name = "SM-S928B"
         self.app_package_name = "com.raha.app.mymoney.pro"
 
         # --- General Timings ---

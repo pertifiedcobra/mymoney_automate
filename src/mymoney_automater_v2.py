@@ -15,8 +15,6 @@ import pandas as pd
 import numpy as np
 
 from src.utils.account_categories_list import accounts_list, entry_type, income_categories_list, expense_categories_list
-from src.app_coordinates.realme_coordinates import AppCoordinates  # Uncomment to use Realme coordinates
-# from src.app_coordinates.s24u_coordinates import AppCoordinates  # Uncomment to use Samsung S24U coordinates
 
 from src.mymoneypro_automator import MyMoneyProAutomator
 from src.data_loader import load_transactions_from_excel, load_sample_transactions

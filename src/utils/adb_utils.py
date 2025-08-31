@@ -37,8 +37,8 @@ def get_device_config(model_name):
     """
     # --- Map ADB model names to your coordinate classes ---
     DEVICE_MAPPING = {
-        "VKCYBQKFBUGEH6CI": Realme7Coordinates,
-        "RZCY71GV4TJ": S24UCoordinates,
+        "RMX2151": Realme7Coordinates,
+        "SM-S928B": S24UCoordinates,
     }
     
     config_class = DEVICE_MAPPING.get(model_name)
