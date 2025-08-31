@@ -1,6 +1,8 @@
 # Coordinates and configuration for Realme 7 device
+from src.app_coordinates.base_coordinates import BaseAppCoordinates
+
 # --- App Coordinates & Configuration ---
-class AppCoordinates:
+class Realme7Coordinates(BaseAppCoordinates):
     """
     A dedicated class to store all screen coordinates and configuration.
     This makes the script portable to different devices and screen resolutions.
