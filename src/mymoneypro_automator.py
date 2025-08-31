@@ -144,17 +144,24 @@ class MyMoneyProAutomator:
                 crop_amount = 0
                 if screen_type == 'account':
                     logger.debug("Cropping image for account screen to remove logos.")
-                    crop_amount = self.coords.account_list_crop_pixels
-                    img = img[:, crop_amount:]
+                    top_crop = self.coords.account_list_crop_top_pixels
+                    left_crop = self.coords.account_list_crop_left_pixels
+                    right_crop = self.coords.account_list_crop_right_pixels
+                    img = img[top_crop:, left_crop:right_crop]
 
                 # --- Convert to grayscale for better OCR accuracy ---
                 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                 # Apply a binary threshold to get a black and white image
                 _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY_INV)
+
+                # Save the pre-processed image for debugging/inspection
+                cv2.imwrite("screen-processed.png", thresh)
                 
                 # Configure Tesseract to use a specific engine mode and page segmentation
                 tesseract_config = r'--oem 3 --psm 6'
                 ocr_data = pytesseract.image_to_data(thresh, config=tesseract_config, output_type=pytesseract.Output.DICT)
+
+                logger.debug(f"OCR Raw Data Sample: {ocr_data['text']}")
                 
                 clean_words_data = []
                 # logger.debug("--- Raw OCR Word Detection & Filtering ---")
@@ -172,7 +179,7 @@ class MyMoneyProAutomator:
                             'text': word, 'left': ocr_data['left'][j], 'top': ocr_data['top'][j],
                             'width': ocr_data['width'][j], 'height': ocr_data['height'][j]
                         })
-                logger.debug(f"{[d['text'] for d in clean_words_data]}")
+                logger.debug(f"Clean Data: {[d['text'] for d in clean_words_data]}")
                 searchable_text = " ".join([d['text'] for d in clean_words_data])
                 logger.debug(f"Searchable Text Block: '{searchable_text}'")
 
@@ -205,6 +212,8 @@ class MyMoneyProAutomator:
             finally:
                 if os.path.exists(screenshot_path_local):
                     os.remove(screenshot_path_local)
+                if os.path.exists("screen-processed.png"):  # Uncomment for debugging
+                    os.remove("screen-processed.png")
                 self._execute_adb(f"rm {screenshot_path_phone}", check=False)
                 # logger.debug("Cleaned up screenshot files.")
         
