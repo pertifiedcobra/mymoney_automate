@@ -107,6 +107,18 @@ class MyMoneyProAutomator:
         self._execute_adb(f"input swipe {x1} {y1} {x2} {y2} {duration}")
         time.sleep(self.coords.LONG_DELAY)
 
+    def print_ocr_data(self, ocr_data):
+        # After ocr_data is obtained:
+        df = pd.DataFrame(ocr_data)
+        # Filter out empty text and low confidence for clarity
+        df = df[df['text'].str.strip() != ""]
+        df = df[df['conf'].astype(int) > 0]  # or >40 for your threshold
+
+        # Select only relevant columns for logging
+        log_df = df[['text', 'conf', 'left', 'top', 'width', 'height']]
+
+        logger.debug("\nOCR Data Table:\n" + log_df.to_string(index=False))
+
     def _find_and_tap_text(self, target_text, screen_type, max_swipes=5):
         """
         Finds an item by its text. First checks a local cache for the location.
@@ -141,13 +153,15 @@ class MyMoneyProAutomator:
                 # --- Image Pre-processing for better OCR accuracy ---
                 img = cv2.imread(screenshot_path_local)
 
-                crop_amount = 0
+                left_crop_amount = 0
+                right_crop_amount = 0
+                top_crop_amount = 0
                 if screen_type == 'account':
                     logger.debug("Cropping image for account screen to remove logos.")
-                    top_crop = self.coords.account_list_crop_top_pixels
-                    left_crop = self.coords.account_list_crop_left_pixels
-                    right_crop = self.coords.account_list_crop_right_pixels
-                    img = img[top_crop:, left_crop:right_crop]
+                    top_crop_amount = self.coords.account_list_crop_top_pixels
+                    left_crop_amount = self.coords.account_list_crop_left_pixels
+                    right_crop_amount = self.coords.account_list_crop_right_pixels
+                    img = img[top_crop_amount:, left_crop_amount:right_crop_amount]
 
                 # --- Convert to grayscale for better OCR accuracy ---
                 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -161,6 +175,7 @@ class MyMoneyProAutomator:
                 tesseract_config = r'--oem 3 --psm 6'
                 ocr_data = pytesseract.image_to_data(thresh, config=tesseract_config, output_type=pytesseract.Output.DICT)
 
+                self.print_ocr_data(ocr_data)
                 logger.debug(f"OCR Raw Data Sample: {ocr_data['text']}")
                 
                 clean_words_data = []
@@ -190,10 +205,13 @@ class MyMoneyProAutomator:
                         phrase_to_check = " ".join([clean_words_data[k+l]['text'] for l in range(len(target_words))])
                         # logger.debug(f"Checking phrase: '{phrase_to_check}' against target '{target_text}'")
                         if target_text.lower() in phrase_to_check.lower():
+                            logger.debug(f"Exact match found for '{phrase_to_check}'")
                             first_word_data = clean_words_data[k]
+                            logger.debug(f"First word data: {first_word_data}")
                             x, y, w, h = first_word_data['left'], first_word_data['top'], first_word_data['width'], first_word_data['height']
-                            center_x = (x + w // 2) + crop_amount
-                            center_y = y + h // 2
+                            center_x = (x + w // 2) + left_crop_amount
+                            center_y = y + h // 2 + top_crop_amount
+                            logger.debug(f"Calculated center coordinates: ({center_x}, {center_y})")
                             
                             logger.success(f"Found match '{phrase_to_check}' via OCR after {i} swipe(s). Tapping and caching location.")
                             # --- Step 2: Cache the newly found location with swipe count ---
