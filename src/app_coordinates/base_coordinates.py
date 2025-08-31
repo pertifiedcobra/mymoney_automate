@@ -6,6 +6,7 @@ class BaseAppCoordinates:
     def __init__(self):
         # --- App Specific Configuration ---
         self.phone_name = "Generic Phone"
+        self.model_name = "GenericModel"
         self.app_package_name = "com.raha.app.mymoney.pro"
 
         # --- General Timings ---
