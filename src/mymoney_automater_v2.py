@@ -59,8 +59,7 @@ def run_automation_workflow(transactions_to_add, input_excel_file=None, main_df=
     logger.info("="*50)
 
     # --- 4. Main Automation Loop ---
-    my_phone_coords = AppCoordinates()
-    automator = MyMoneyProAutomator(coords=my_phone_coords)
+    automator = MyMoneyProAutomator()
     total_transactions = len(transactions_to_add)
 
     try:
@@ -75,7 +74,7 @@ def run_automation_workflow(transactions_to_add, input_excel_file=None, main_df=
             else:
                 logger.error(f"STOPPING SCRIPT due to failure on '{transaction['notes']}'.")
                 break
-            time.sleep(my_phone_coords.SHORT_DELAY)
+            time.sleep(automator.coords.SHORT_DELAY)
     finally:
         # --- 5. Save Progress ---
         # This block runs whether the loop finishes, breaks, or is interrupted (Ctrl+C)

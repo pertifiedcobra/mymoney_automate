@@ -12,19 +12,18 @@ import pandas as pd
 import numpy as np
 
 from src.utils.ui_cache import UICache
-from src.app_coordinates.realme_coordinates import AppCoordinates  # Uncomment to use Realme coordinates
-# from src.app_coordinates.s24u_coordinates import AppCoordinates  # Uncomment to use Samsung S24U coordinates
+from src.utils.adb_utils import get_device_coordinates
 
 
 class MyMoneyProAutomator:
     """
     A class to automate expense entry in the MyMoneyPro app using ADB and OCR.
     """
-    def __init__(self, coords: AppCoordinates):
-        self.coords = coords
+    def __init__(self):
+        self.coords = get_device_coordinates()
         self.calendar = calendar.Calendar(firstweekday=calendar.SUNDAY)
         # Initialize and load the UI cache
-        phone_name = coords.phone_name.strip().replace(" ", "").replace("\n", "")
+        phone_name = self.coords.phone_name.strip().replace(" ", "").replace("\n", "")
         cache_filename = f"{phone_name}_ui_cache.json"
         cache_dir = os.path.join(os.path.dirname(__file__), "app_coordinates")
         cache_path = os.path.join(cache_dir, cache_filename)
