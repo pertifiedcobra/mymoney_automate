@@ -70,23 +70,26 @@ class S24UCoordinates(BaseAppCoordinates):
         # --- Time Picker Dialog ---
         # The keyboard icon in the bottom-left of the clock view to switch to text input.
         self.time_keypad_mode_coords = (342, 2257)
-        # The hour input field in the text-based time picker.
-        self.time_hour_coords = (420, 1750)
-        # The minute input field in the text-based time picker.
-        self.time_minute_coords = (560, 1750)
         # The dropdown selector for AM/PM in the text-based time picker.
         self.time_ampm_selector_coords = (1080, 1730)
         # The coordinates for the 'AM' and 'PM' options themselves after the dropdown is open.
         self.time_ampm_coords = {'AM': (930, 1755), 'PM': (930, 1925)}
-        # The 'OK' button to confirm the time selection.
-        self.time_ok_coords = (1035, 2040)
+        # The hour input field in the text-based time picker. (After tapping the keyboard icon)
+        self.time_hour_coords = (420, 1750)
+        # The minute input field in the text-based time picker.
+        self.time_minute_coords = (553, 1200)
+        # The 'OK' button to confirm the time selection. (After entering time)
+        self.time_ok_coords = (1035, 1450)
 
         # --- Scrolling / Swiping ---
         # Defines a swipe action from a start (x,y) to an end (x,y) with a duration (ms).
         self.swipe_coords = (500, 1800, 500, 800, 300)
         
         # --- OCR Configuration ---
-        # Number of pixels to crop from the left of the screen on the 'Accounts' page to ignore logos.
-        self.account_list_crop_pixels = 300
+        # Number of pixels from the left of the screen on the 'Accounts' page to remove logos(from left) and account balance (from right).
+        self.account_list_crop_left_pixels = 300  # Starting X coordinate for cropping
+        self.account_list_crop_right_pixels = 960  # Ending X coordinate for cropping
+        # Number of pixels to crop from the top of the screen on the 'Accounts' page to remove unnecessary text.
+        self.account_list_crop_top_pixels = 330
         # Number of characters to use when searching for long category names that get truncated with '...'.
         self.category_name_crop = 10

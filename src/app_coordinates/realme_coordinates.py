@@ -69,14 +69,14 @@ class Realme7Coordinates(BaseAppCoordinates):
         # --- Time Picker Dialog ---
         # The keyboard icon in the bottom-left of the clock view to switch to text input.
         self.time_keypad_mode_coords = (209, 1731)
-        # The hour input field in the text-based time picker.
-        self.time_hour_coords = (256, 1026)
-        # The minute input field in the text-based time picker.
-        self.time_minute_coords = (426, 1026)
         # The dropdown selector for AM/PM in the text-based time picker.
         self.time_ampm_selector_coords = (838, 1299)
         # The coordinates for the 'AM' and 'PM' options themselves after the dropdown is open.
         self.time_ampm_coords = {'AM': (705, 1333), 'PM': (700, 1457)}
+        # The hour input field in the text-based time picker.
+        self.time_hour_coords = (256, 1026)
+        # The minute input field in the text-based time picker.
+        self.time_minute_coords = (426, 1026)
         # The 'OK' button to confirm the time selection.
         self.time_ok_coords = (852, 1542)
 
@@ -85,7 +85,10 @@ class Realme7Coordinates(BaseAppCoordinates):
         self.swipe_coords = (500, 1800, 500, 800, 300)
         
         # --- OCR Configuration ---
-        # Number of pixels to crop from the left of the screen on the 'Accounts' page to ignore logos.
-        self.account_list_crop_pixels = 240
+        # Number of pixels from the left of the screen on the 'Accounts' page to remove logos(from left) and account balance (from right).
+        self.account_list_crop_left_pixels = 240  # Starting X coordinate for cropping
+        self.account_list_crop_right_pixels = 875  # Ending X coordinate for cropping
+        # Number of pixels to crop from the top of the screen on the 'Accounts' page to remove unnecessary text.
+        self.account_list_crop_top_pixels = 260
         # Number of characters to use when searching for long category names that get truncated with '...'.
         self.category_name_crop = 10
