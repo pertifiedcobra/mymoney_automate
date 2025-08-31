@@ -14,8 +14,6 @@ import pprint
 import pandas as pd
 import numpy as np
 
-from src.utils.account_categories_list import accounts_list, entry_type, income_categories_list, expense_categories_list
-
 from src.mymoneypro_automator import MyMoneyProAutomator
 from src.data_loader import load_transactions_from_excel, load_sample_transactions
 from src.utils.validate_transactions import validate_transactions

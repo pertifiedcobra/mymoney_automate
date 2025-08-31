@@ -67,8 +67,4 @@ def get_device_coordinates():
     if not my_phone_coords:
         logger.error(f"Failed to load device configuration for model {connected_model}.")
         raise
-
-    model_name = get_phone_model()
-    if model_name:
-        return get_device_config(model_name)
-    return None
+    return my_phone_coords
